@@ -393,7 +393,7 @@ async def get_report_pdf(
         raise HTTPException(status_code=404, detail="Report not found")
 
     pdf_bytes = _generate_pdf_report(report)
-    filename = f"report-{report_id}.pdf"
+    filename = f"report-{report.report_id}.pdf"
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
@@ -420,7 +420,7 @@ async def get_report_json(
         raise HTTPException(status_code=404, detail="Report not found")
 
     json_str = _export_report_to_json(report)
-    filename = f"report-{report_id}.json"
+    filename = f"report-{report.report_id}.json"
     return Response(
         content=json_str,
         media_type="application/json",

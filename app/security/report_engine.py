@@ -35,6 +35,7 @@ from ..models import (
     Report,
     Session,
     SeverityCounts,
+    TestStatus,
 )
 from .sanitization import sanitize_data
 
@@ -196,10 +197,33 @@ def _build_finding_detail(
     elif finding.status == FindingStatus.NOT_EXECUTED or finding.execution_status == ExecutionStatus.NOT_EXECUTED:
         limitations_list.append("No evidence was collected because the test was not executed.")
 
+    # Resolve status and outcome values cleanly with veracity guard
+    status_str = finding.status.value if hasattr(finding.status, "value") else str(finding.status)
+    outcome_str = finding.assessment_outcome.value if finding.assessment_outcome else None
+
+    # Veracity Guard: CONFIRMED strictly requires human review
+    if (status_str.upper() == "CONFIRMED" or (outcome_str and outcome_str.upper() == "CONFIRMED")) and not finding.is_human_reviewed:
+        status_str = FindingStatus.SUSPECTED.value
+        outcome_str = AssessmentOutcome.SUSPECTED.value
+        limitations_list.append(
+            "Veracity Guard: This finding was recorded as confirmed without an explicit human review record. "
+            "It has been strictly constrained to SUSPECTED in accordance with verification policy."
+        )
+
     limitations = " ".join(limitations_list) if limitations_list else None
 
-    # Resolve status value cleanly
-    status_str = finding.status.value if hasattr(finding.status, "value") else str(finding.status)
+    has_retest = bool(
+        finding.requires_re_review
+        or any(
+            (getattr(r, "retest_run", False) if not isinstance(r, dict) else r.get("retest_run", False))
+            for r in (finding.review_history or [])
+        )
+    )
+    remediation_status = (
+        "Retest Executed (Updated network evidence collected)"
+        if has_retest
+        else "Unverified Recommendation (Pending retest execution)"
+    )
 
     return FindingDetail(
         finding_id=finding.finding_id,
@@ -214,9 +238,10 @@ def _build_finding_detail(
             finding.status, "No behavioral description available."
         ),
         recommended_remediation=remediation,
+        remediation_status=remediation_status,
         limitations=limitations,
         execution_status=finding.execution_status.value if finding.execution_status else None,
-        assessment_outcome=finding.assessment_outcome.value if finding.assessment_outcome else None,
+        assessment_outcome=outcome_str,
         assessment_reason=finding.assessment_reason or finding.notes,
         is_human_reviewed=finding.is_human_reviewed,
         reviewer_id=finding.reviewer_id,
@@ -296,6 +321,49 @@ def generate_report(session: Session, target_base_url: str) -> Report:
     not_executed_ids = [f.finding_id for f in not_executed]
     failed_ids = [f.finding_id for f in failed]
 
+    # Proposals breakdown
+    proposed_tests = sum(
+        1 for p in session.proposals.values() if p.status == TestStatus.PROPOSED
+    )
+    approved_tests = sum(
+        1 for p in session.proposals.values() if p.status == TestStatus.APPROVED
+    )
+    rejected_tests = sum(
+        1 for p in session.proposals.values() if p.status == TestStatus.REJECTED
+    )
+
+    # Unsupported tests: recorded as NOT_EXECUTED with "unsupported" in notes or matching known unsupported test types
+    unsupported_tests = sum(
+        1 for f in not_executed
+        if "unsupported" in (f.notes or "").lower()
+        or (session.proposals.get(f.test_id) and session.proposals.get(f.test_id).test_type in ["MassAssignment", "ExcessiveData"])
+    )
+
+    # Veracity-checked outcome counts
+    confirmed_findings = sum(
+        1 for f in all_findings
+        if (f.assessment_outcome == AssessmentOutcome.CONFIRMED or f.status == FindingStatus.CONFIRMED)
+        and f.is_human_reviewed
+    )
+    suspected_findings = sum(
+        1 for f in all_findings
+        if (f.assessment_outcome == AssessmentOutcome.SUSPECTED or (f.status == FindingStatus.SUSPECTED and f.assessment_outcome is None))
+        or ((f.assessment_outcome == AssessmentOutcome.CONFIRMED or f.status == FindingStatus.CONFIRMED) and not f.is_human_reviewed)
+    )
+    false_positive_findings = sum(
+        1 for f in all_findings
+        if (f.assessment_outcome == AssessmentOutcome.FALSE_POSITIVE or f.status == FindingStatus.FALSE_POSITIVE)
+        and f.is_human_reviewed
+    )
+    access_denied_findings = sum(
+        1 for f in all_findings
+        if f.assessment_outcome == AssessmentOutcome.ACCESS_DENIED
+    )
+    inconclusive_findings = sum(
+        1 for f in all_findings
+        if f.assessment_outcome == AssessmentOutcome.INCONCLUSIVE
+    )
+
     # Compute execution and review statistics
     pending_review = sum(
         1 for f in all_findings
@@ -305,14 +373,20 @@ def generate_report(session: Session, target_base_url: str) -> Report:
 
     execution_statistics = {
         "total_proposals": len(session.proposals),
+        "proposed_tests": proposed_tests,
+        "approved_tests": approved_tests,
+        "rejected_tests": rejected_tests,
         "total_findings": len(all_findings),
         "executed_tests": len(executed),
         "completed_tests": sum(1 for f in all_findings if f.execution_status == ExecutionStatus.COMPLETED or (f.execution_status is None and f.status != FindingStatus.NOT_EXECUTED)),
         "failed_tests": len(failed),
+        "unsupported_tests": unsupported_tests,
         "not_executed_tests": len(not_executed),
-        "suspected_findings": sum(1 for f in all_findings if f.assessment_outcome == AssessmentOutcome.SUSPECTED or (f.status == FindingStatus.SUSPECTED and f.assessment_outcome is None)),
-        "confirmed_findings": sum(1 for f in all_findings if f.assessment_outcome == AssessmentOutcome.CONFIRMED or f.status == FindingStatus.CONFIRMED),
-        "false_positive_findings": sum(1 for f in all_findings if f.assessment_outcome == AssessmentOutcome.FALSE_POSITIVE or f.status == FindingStatus.FALSE_POSITIVE),
+        "suspected_findings": suspected_findings,
+        "confirmed_findings": confirmed_findings,
+        "false_positive_findings": false_positive_findings,
+        "access_denied_findings": access_denied_findings,
+        "inconclusive_findings": inconclusive_findings,
         "pending_review": pending_review,
     }
 
@@ -329,11 +403,27 @@ def generate_report(session: Session, target_base_url: str) -> Report:
         for ep in (session.endpoints or [])
     ]
 
-    retesting_guidance = (
-        "To verify remediations, re-execute the approved test proposals against the patched target. "
-        "Fresh network execution collects updated evidence; previously confirmed findings will "
-        "require human re-review while maintaining full audit history."
-    )
+    retested_findings = [
+        f for f in all_findings
+        if f.requires_re_review
+        or any(
+            (getattr(r, "retest_run", False) if not isinstance(r, dict) else r.get("retest_run", False))
+            for r in (f.review_history or [])
+        )
+    ]
+    retested_count = len(retested_findings)
+
+    if retested_count == 0:
+        retesting_guidance = (
+            "Initial Assessment Run — No retest execution has been conducted in this session. "
+            "All suggested remediations are unverified advisory recommendations. "
+            "To verify a fix, deploy the patch and re-execute the approved test proposals."
+        )
+    else:
+        retesting_guidance = (
+            f"Retest Assessment Run — {retested_count} finding(s) have undergone repeat network execution. "
+            "Fresh execution evidence invalidates prior review decisions and requires operator re-review."
+        )
 
     methodology = (
         "Automated differential security probes with human-in-the-loop verification. "

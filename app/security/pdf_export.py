@@ -298,26 +298,38 @@ def generate_pdf_report(report: Report) -> bytes:
             Paragraph(str(stats.get("executed_tests", 0)), body_style),
         ],
         [
+            Paragraph("Approved Proposals:", body_style),
+            Paragraph(str(stats.get("approved_tests", 0)), body_style),
             Paragraph("Completed Tests:", body_style),
             Paragraph(str(stats.get("completed_tests", 0)), body_style),
+        ],
+        [
+            Paragraph("Proposed / Rejected:", body_style),
+            Paragraph(f"{stats.get('proposed_tests', 0)} / {stats.get('rejected_tests', 0)}", body_style),
             Paragraph("Failed Tests:", body_style),
             Paragraph(str(stats.get("failed_tests", 0)), body_style),
         ],
         [
+            Paragraph("Unsupported Tests:", body_style),
+            Paragraph(str(stats.get("unsupported_tests", 0)), body_style),
             Paragraph("Unexecuted Tests:", body_style),
             Paragraph(str(stats.get("not_executed_tests", len(report.not_executed_tests))), body_style),
+        ],
+        [
             Paragraph("Total Findings:", body_style),
             Paragraph(str(stats.get("total_findings", len(report.finding_details))), body_style),
+            Paragraph("Confirmed Vulns:", body_style),
+            Paragraph(str(stats.get("confirmed_findings", 0)), body_style),
         ],
         [
-            Paragraph("Confirmed Vulnerabilities:", body_style),
-            Paragraph(str(stats.get("confirmed_findings", 0)), body_style),
             Paragraph("Suspected Findings:", body_style),
             Paragraph(str(stats.get("suspected_findings", 0)), body_style),
+            Paragraph("False Positives:", body_style),
+            Paragraph(str(stats.get("false_positive_findings", 0)), body_style),
         ],
         [
-            Paragraph("False Positives Identified:", body_style),
-            Paragraph(str(stats.get("false_positive_findings", 0)), body_style),
+            Paragraph("Access Denied (Blocked):", body_style),
+            Paragraph(str(stats.get("access_denied_findings", 0)), body_style),
             Paragraph("Awaiting Human Review:", body_style),
             Paragraph(str(stats.get("pending_review", report.pending_review_count)), body_style),
         ],
@@ -451,7 +463,19 @@ def generate_pdf_report(report: Report) -> bytes:
                     )
                 )
 
-            # Recommended Remediation
+            # Recommended Remediation and Verification Status
+            rem_status = finding.remediation_status or (
+                "Retest Executed (Updated network evidence collected)"
+                if finding.requires_re_review
+                else "Unverified Recommendation (Pending retest execution)"
+            )
+            rem_status_color = "#0284c7" if "Retest" in rem_status else "#64748b"
+            finding_blocks.append(
+                Paragraph(
+                    f"<b>Remediation Status:</b> <font color='{rem_status_color}'><b>{_escape(rem_status)}</b></font>",
+                    body_style,
+                )
+            )
             finding_blocks.append(Paragraph("<b>Recommended Remediation:</b>", body_style))
             finding_blocks.append(Paragraph(_escape(finding.recommended_remediation), body_style))
 
@@ -464,10 +488,17 @@ def generate_pdf_report(report: Report) -> bytes:
     # 6. Retesting and Governance Guidance
     story.append(Spacer(1, 6))
     story.append(Paragraph("4. Retesting Guidance & Veracity Statement", h2_style))
+    retest_guidance_text = (
+        _escape(report.retesting_guidance)
+        if hasattr(report, "retesting_guidance") and report.retesting_guidance
+        else (
+            "Initial Assessment Run — No retest execution has been conducted in this session. "
+            "All suggested remediations are unverified advisory recommendations. "
+            "To verify a fix, deploy the patch and re-execute the approved test proposals."
+        )
+    )
     retest_text = (
-        "<b>Verification Workflow:</b> Remediate the identified authorization or authentication flaw in the API codebase, "
-        "redeploy the service, and re-execute approved test proposals. New executions generate fresh sanitized evidence and "
-        "automatically trigger the re-review requirement while preserving the prior audit trail.<br/><br/>"
+        f"<b>Status:</b> {retest_guidance_text}<br/><br/>"
         "<b>Veracity Guarantee:</b> Automated scanners produce initial indicators (SUSPECTED); only explicit human review "
         "can mark a finding as CONFIRMED. All sensitive credentials, tokens, and authorization headers have been redacted."
     )
@@ -476,3 +507,4 @@ def generate_pdf_report(report: Report) -> bytes:
     # Build document
     doc.build(story, canvasmaker=NumberedCanvas)
     return buffer.getvalue()
+

@@ -416,6 +416,7 @@ class FindingDetail(BaseModel):
     # Re-review required flag and serialized review history for reports
     requires_re_review: bool = False
     review_history: List[Dict[str, Any]] = Field(default_factory=list)
+    remediation_status: Optional[str] = None
 
 
 class SeverityCounts(BaseModel):

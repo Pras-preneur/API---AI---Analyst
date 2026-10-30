@@ -45,3 +45,4 @@ def export_report_to_json(report: Report, indent: int = 2) -> str:
     """
     dict_data = export_report_to_dict(report)
     return json.dumps(dict_data, indent=indent, ensure_ascii=False)
+
