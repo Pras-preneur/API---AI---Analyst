@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+# Virtual environments
+venv/
+.venv/
+.env/
+# Pip cache
+pip-wheel-metadata/
+# Distribution / packaging
+build/
+ dist/
+*.egg-info/
+# Pytest cache
+.pytest_cache/
+# IDEs
+.idea/
+*.swp
+# Reports
+reports/
+

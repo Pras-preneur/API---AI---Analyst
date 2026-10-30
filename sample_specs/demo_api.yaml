@@ -1,0 +1,81 @@
+openapi: 3.0.0
+info:
+  title: Demo API
+  version: "1.0"
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+  parameters:
+    LimitParam:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        default: 10
+security:
+  - BearerAuth: []
+paths:
+  /users:
+    get:
+      summary: List users
+      operationId: listUsers
+      parameters:
+        - $ref: "#/components/parameters/LimitParam"
+      responses:
+        "200":
+          description: A list of users.
+    post:
+      summary: Create a user
+      operationId: createUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+      responses:
+        "201":
+          description: User created.
+  /users/{user_id}:
+    parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      summary: Get user
+      operationId: getUser
+      responses:
+        "200":
+          description: User details.
+    delete:
+      summary: Delete user
+      operationId: deleteUser
+      security: []  # explicitly no auth
+      responses:
+        "204":
+          description: Deleted.
+  /profile:
+    patch:
+      summary: Update profile
+      operationId: updateProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+      responses:
+        "200":
+          description: Profile updated.
+      security:
+        - BearerAuth: []
