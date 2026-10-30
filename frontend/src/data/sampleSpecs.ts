@@ -1,166 +1,207 @@
 import type { ApiSpec } from '../types/assistant';
 
+const DEMO_API_YAML = `openapi: 3.0.0
+info:
+  title: Demo API
+  version: "1.0"
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+  parameters:
+    LimitParam:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        default: 10
+security:
+  - BearerAuth: []
+paths:
+  /users:
+    get:
+      summary: List users
+      operationId: listUsers
+      parameters:
+        - $ref: "#/components/parameters/LimitParam"
+      responses:
+        "200":
+          description: A list of users.
+    post:
+      summary: Create a user
+      operationId: createUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+      responses:
+        "201":
+          description: User created.
+  /users/{user_id}:
+    parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      summary: Get user
+      operationId: getUser
+      responses:
+        "200":
+          description: User details.
+    delete:
+      summary: Delete user
+      operationId: deleteUser
+      security: []
+      responses:
+        "204":
+          description: Deleted.
+  /profile:
+    patch:
+      summary: Update profile
+      operationId: updateProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+      responses:
+        "200":
+          description: Profile updated.
+`;
+
+const AUTH_DEMO_API_YAML = `openapi: 3.0.0
+info:
+  title: Broken Authentication Demo API
+  version: "1.0"
+  description: OpenAPI 3.0 specification demonstrating Broken Authentication differential testing.
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: HTTP Bearer token authentication
+security:
+  - BearerAuth: []
+paths:
+  /auth/secure/profile:
+    get:
+      summary: Retrieve protected user profile (Secure)
+      description: Endpoint strictly enforces authentication; returns 401 Unauthorized when credentials are omitted.
+      operationId: getSecureProfile
+      responses:
+        "200":
+          description: Protected user profile successfully retrieved
+        "401":
+          description: Unauthorized - missing or invalid credentials
+  /auth/vulnerable/profile:
+    get:
+      summary: Retrieve protected user profile (Vulnerable to Broken Authentication)
+      description: OpenAPI declares authentication requirement, but implementation fails to verify credentials.
+      operationId: getVulnerableProfile
+      responses:
+        "200":
+          description: User profile retrieved
+        "401":
+          description: Unauthorized
+`;
+
 export const SAMPLE_SPECS: ApiSpec[] = [
   {
-    id: 'spec-fintech',
-    title: 'FinTech Core Banking Gateway API',
-    version: '2.4.0',
-    description: 'Core retail banking API handling tenant account records, transaction transfers, and administrative audit streams.',
-    baseUrl: 'https://api.fintech-core.internal/v2',
-    uploadedAt: 'Today, 10:24 AM',
-    format: 'json',
-    endpoints: [
-      {
-        id: 'ep-fin-1',
-        path: '/api/v2/users/{id}/financial-records',
-        method: 'GET',
-        summary: 'Retrieve user financial transactions and balances',
-        description: 'Returns private checking and savings statement rows for specified user ID.',
-        authRequired: false,
-        parameters: [
-          { name: 'id', in: 'path', required: true, schemaType: 'string', description: 'User account identifier' },
-          { name: 'start_date', in: 'query', required: false, schemaType: 'string', description: 'ISO filter timestamp' },
-        ],
-        potentialRisks: ['BOLA / IDOR', 'Excessive Data Exposure'],
-      },
-      {
-        id: 'ep-fin-2',
-        path: '/api/v1/admin/tenants/export',
-        method: 'POST',
-        summary: 'Export bulk tenant transaction ledger',
-        description: 'Administrative export routine generating CSV/JSON ledger files.',
-        authRequired: true,
-        parameters: [
-          { name: 'tenant_id', in: 'query', required: true, schemaType: 'string', description: 'Target corporate tenant' },
-          { name: 'format', in: 'query', required: false, schemaType: 'string', description: 'csv or json' },
-        ],
-        potentialRisks: ['Broken Function Level Authorization (BFLA)'],
-      },
-      {
-        id: 'ep-fin-3',
-        path: '/api/v3/profile/settings',
-        method: 'PUT',
-        summary: 'Update user profile metadata',
-        description: 'Updates client telephone, display name, and billing preferences.',
-        authRequired: true,
-        parameters: [
-          { name: 'payload', in: 'body', required: true, schemaType: 'object', description: 'JSON user settings payload' },
-        ],
-        potentialRisks: ['Mass Assignment / Property Tampering'],
-      },
-      {
-        id: 'ep-fin-4',
-        path: '/debug/metrics/env-dump',
-        method: 'GET',
-        summary: 'Diagnostics and telemetry endpoint',
-        description: 'Returns internal runtime environment variables and telemetry counters.',
-        authRequired: false,
-        parameters: [],
-        potentialRisks: ['Sensitive Information Disclosure', 'Security Misconfiguration'],
-      },
-      {
-        id: 'ep-fin-5',
-        path: '/api/v2/transfer/execute',
-        method: 'POST',
-        summary: 'Execute wire balance transfer',
-        description: 'Dispatches funds between accounts.',
-        authRequired: true,
-        parameters: [
-          { name: 'source_account', in: 'body', required: true, schemaType: 'string' },
-          { name: 'destination_account', in: 'body', required: true, schemaType: 'string' },
-          { name: 'amount', in: 'body', required: true, schemaType: 'number' },
-        ],
-        potentialRisks: ['Broken Object Level Authorization (BOLA)'],
-      },
-    ],
-  },
-  {
-    id: 'spec-health',
-    title: 'Healthcare EHR Patient Portal API',
-    version: '1.2.0',
-    description: 'Electronic Health Record (EHR) gateway managing protected health information (PHI) and clinical prescriptions.',
-    baseUrl: 'https://ehr.hospital-gateway.org/api/v1',
-    uploadedAt: 'Yesterday',
+    id: 'spec-demo',
+    title: 'Demo API (BOLA & BFLA Assessment)',
+    version: '1.0.0',
+    description: 'Verified testbed API with object parameters, administrative routines, and profile mutators.',
+    baseUrl: 'http://127.0.0.1:8001',
+    uploadedAt: 'Preloaded',
     format: 'yaml',
+    rawContent: DEMO_API_YAML,
     endpoints: [
       {
-        id: 'ep-health-1',
-        path: '/api/v1/patients/{patient_id}/records',
+        id: 'ep-demo-1',
+        path: '/users',
         method: 'GET',
-        summary: 'Access diagnostic records and chart history',
+        summary: 'List users',
         authRequired: true,
-        parameters: [
-          { name: 'patient_id', in: 'path', required: true, schemaType: 'string' },
-        ],
-        potentialRisks: ['BOLA / IDOR', 'PHI Disclosure'],
-      },
-      {
-        id: 'ep-health-2',
-        path: '/api/v1/prescriptions/dispense',
-        method: 'POST',
-        summary: 'Authorize pharmacy dispensing schedule',
-        authRequired: true,
-        parameters: [
-          { name: 'rx_id', in: 'body', required: true, schemaType: 'string' },
-        ],
-        potentialRisks: ['BFLA Auth Bypass'],
-      },
-      {
-        id: 'ep-health-3',
-        path: '/api/v1/directory/practitioners',
-        method: 'GET',
-        summary: 'Search active medical practitioners',
-        authRequired: false,
-        parameters: [
-          { name: 'query', in: 'query', required: false, schemaType: 'string' },
-        ],
+        parameters: [{ name: 'limit', in: 'query', required: false, schemaType: 'integer' }],
         potentialRisks: ['Excessive Data Exposure'],
       },
-    ],
-  },
-  {
-    id: 'spec-ecommerce',
-    title: 'Global Retail Commerce API',
-    version: '3.0.1',
-    description: 'E-commerce microservice handling shopping carts, customer orders, and product search catalogs.',
-    baseUrl: 'https://api.store-retail.com',
-    uploadedAt: '3 days ago',
-    format: 'json',
-    endpoints: [
       {
-        id: 'ep-ecom-1',
-        path: '/api/v1/orders/{order_id}',
-        method: 'GET',
-        summary: 'Fetch customer order details and shipment tracking',
+        id: 'ep-demo-2',
+        path: '/users',
+        method: 'POST',
+        summary: 'Create a user',
         authRequired: true,
-        parameters: [
-          { name: 'order_id', in: 'path', required: true, schemaType: 'string' },
-        ],
+        parameters: [],
+        potentialRisks: ['Mass Assignment'],
+      },
+      {
+        id: 'ep-demo-3',
+        path: '/users/{user_id}',
+        method: 'GET',
+        summary: 'Get user details by ID',
+        authRequired: true,
+        parameters: [{ name: 'user_id', in: 'path', required: true, schemaType: 'string' }],
         potentialRisks: ['BOLA / IDOR'],
       },
       {
-        id: 'ep-ecom-2',
-        path: '/api/v1/cart/checkout',
-        method: 'POST',
-        summary: 'Commit cart checkout and discount coupons',
-        authRequired: true,
-        parameters: [
-          { name: 'cart_id', in: 'body', required: true, schemaType: 'string' },
-          { name: 'coupon_code', in: 'body', required: false, schemaType: 'string' },
-        ],
-        potentialRisks: ['Mass Assignment', 'Business Logic Bypass'],
+        id: 'ep-demo-4',
+        path: '/users/{user_id}',
+        method: 'DELETE',
+        summary: 'Delete user account',
+        authRequired: false,
+        parameters: [{ name: 'user_id', in: 'path', required: true, schemaType: 'string' }],
+        potentialRisks: ['Broken Function Level Authorization (BFLA)'],
       },
       {
-        id: 'ep-ecom-3',
-        path: '/api/v1/catalog/search',
+        id: 'ep-demo-5',
+        path: '/profile',
+        method: 'PATCH',
+        summary: 'Update profile email',
+        authRequired: true,
+        parameters: [],
+        potentialRisks: ['Mass Assignment'],
+      },
+    ],
+  },
+  {
+    id: 'spec-auth-demo',
+    title: 'Broken Authentication Demo API',
+    version: '1.0.0',
+    description: 'Testbed specification for Broken Authentication differential verification.',
+    baseUrl: 'http://127.0.0.1:8001',
+    uploadedAt: 'Preloaded',
+    format: 'yaml',
+    rawContent: AUTH_DEMO_API_YAML,
+    endpoints: [
+      {
+        id: 'ep-auth-1',
+        path: '/auth/secure/profile',
         method: 'GET',
-        summary: 'Search store catalog by regex / filter keyword',
-        authRequired: false,
-        parameters: [
-          { name: 'q', in: 'query', required: false, schemaType: 'string' },
-          { name: 'limit', in: 'query', required: false, schemaType: 'number' },
-        ],
-        potentialRisks: ['Unrestricted Resource Consumption', 'ReDoS'],
+        summary: 'Retrieve protected user profile (Secure)',
+        authRequired: true,
+        parameters: [],
+        potentialRisks: ['Authentication Boundary'],
+      },
+      {
+        id: 'ep-auth-2',
+        path: '/auth/vulnerable/profile',
+        method: 'GET',
+        summary: 'Retrieve protected user profile (Vulnerable)',
+        authRequired: true,
+        parameters: [],
+        potentialRisks: ['Broken Authentication (Missing Credentials)'],
       },
     ],
   },

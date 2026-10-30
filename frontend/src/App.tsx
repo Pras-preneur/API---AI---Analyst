@@ -21,11 +21,10 @@ import type { SecurityFindingInput } from './types/security';
 import { SAMPLE_SPECS } from './data/sampleSpecs';
 import {
   sendChatMessageToSLM,
-  generateTestProposals,
-  executeApprovedTest,
+  fetchBackendProposals,
   generateAssessmentReport,
 } from './services/chatService';
-import { checkBackendHealth } from './services/api';
+import { checkBackendHealth, approveProposal, rejectProposal } from './services/api';
 import { Layers, ShieldAlert, FileDown, Plus, FileCode, CheckCircle2 } from 'lucide-react';
 
 const INITIAL_GREETING: ChatMessage = {
@@ -33,26 +32,18 @@ const INITIAL_GREETING: ChatMessage = {
   sender: 'assistant',
   text:
     `Welcome to the **API Intelligence & Security Testing Assistant**.\n\n` +
-    `I am your conversational, human-in-the-loop security testing copilot. I analyze OpenAPI specifications, ` +
-    `propose non-destructive probe assertions, and evaluate risk using our trained ML priority classifier.\n\n` +
-    `Preloaded **${SAMPLE_SPECS[0].title}** (${SAMPLE_SPECS[0].endpoints.length} endpoints). ` +
-    `You can inspect inventory, run tests, or ask any question.`,
+    `I am your conversational, human-in-the-loop security testing copilot. Connect or upload an OpenAPI specification ` +
+    `to initialize a verified backend testing session, inspect parsed endpoints, and formulate security test proposals.`,
   timestamp: 'Just now',
-  specContext: {
-    specTitle: SAMPLE_SPECS[0].title,
-    endpointCount: SAMPLE_SPECS[0].endpoints.length,
-  },
-  proposedTests: generateTestProposals(SAMPLE_SPECS[0]),
 };
 
 const DEFAULT_SESSIONS: ChatSession[] = [
   {
     id: 'session-default-1',
-    title: 'FinTech Banking API Audit',
+    title: 'API Security Audit Session',
     createdAt: Date.now() - 3600000,
     updatedAt: Date.now() - 1800000,
-    messages: [],
-    specId: SAMPLE_SPECS[0].id,
+    messages: [INITIAL_GREETING],
   },
   {
     id: 'session-default-2',
@@ -81,10 +72,13 @@ export function App() {
   const [activeView, setActiveView] = useState<WorkspaceView>('chat');
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  // Specifications
+  // Specifications & Backend Session
   const [specs, setSpecs] = useState<ApiSpec[]>(SAMPLE_SPECS);
-  const [activeSpec, setActiveSpec] = useState<ApiSpec | null>(SAMPLE_SPECS[0]);
+  const [activeSpec, setActiveSpec] = useState<ApiSpec | null>(null);
+  const [backendSessionId, setBackendSessionId] = useState<string | null>(null);
   const [backendOnline, setBackendOnline] = useState(false);
+  const [isGeneratingProposals, setIsGeneratingProposals] = useState(false);
+  const [pendingProposalActions, setPendingProposalActions] = useState<Record<string, boolean>>({});
 
   // Sessions Store (Persistent with localStorage)
   const [sessions, setSessions] = useState<ChatSession[]>(() => {
@@ -113,7 +107,16 @@ export function App() {
   // Save sessions to localStorage
   useEffect(() => {
     try {
-      localStorage.setItem('zynora_chat_sessions_v4', JSON.stringify(sessions));
+      const sanitizedSessions = sessions.map((ses) => ({
+        id: ses.id,
+        title: ses.title,
+        createdAt: ses.createdAt,
+        updatedAt: ses.updatedAt,
+        messages: ses.messages,
+        specId: ses.specId,
+        isArchived: ses.isArchived,
+      }));
+      localStorage.setItem('zynora_chat_sessions_v4', JSON.stringify(sanitizedSessions));
     } catch {
       // Storage quota or sandboxed
     }
@@ -217,22 +220,25 @@ export function App() {
 
   // Spec upload & selection
   const handleSpecLoaded = (newSpec: ApiSpec) => {
-    setSpecs((prev) => [newSpec, ...prev]);
+    setSpecs((prev) => [newSpec, ...prev.filter((sp) => sp.id !== newSpec.id)]);
     setActiveSpec(newSpec);
-    const initialTests = generateTestProposals(newSpec);
+    if (newSpec.sessionId) {
+      setBackendSessionId(newSpec.sessionId);
+    }
 
     const switchMsg: ChatMessage = {
       id: `m-${Date.now()}`,
       sender: 'assistant',
       text:
-        `Uploaded and parsed specification **${newSpec.title}** (v${newSpec.version}). ` +
-        `Cataloged **${newSpec.endpoints.length} endpoints**. Ready for security probes.`,
+        `### OpenAPI Specification Ingested\n\n` +
+        `Successfully parsed **${newSpec.title}** (v${newSpec.version}) with **${newSpec.endpoints.length} endpoints**.\n` +
+        `**Active Backend Session ID:** \`${newSpec.sessionId || 'Pending'}\`\n\n` +
+        `The endpoint inventory has been cataloged in the backend session store. Type **"propose tests"** or inspect the **Inventory** to view endpoints.`,
       timestamp: 'Just now',
       specContext: {
         specTitle: newSpec.title,
         endpointCount: newSpec.endpoints.length,
       },
-      proposedTests: initialTests,
     };
 
     updateCurrentSessionMessages([...messages, switchMsg]);
@@ -255,26 +261,92 @@ export function App() {
       timestamp: 'Just now',
     };
 
-    // Grab current session messages directly to avoid stale closures
-    const activeSessionData = sessions.find((s) => s.id === targetSessionId);
+    const activeSessionData = sessions.find((ses) => ses.id === targetSessionId);
     const baseMessages = activeSessionData ? activeSessionData.messages : messages;
     const updated = [...baseMessages, userMsg];
 
     setMessages(updated);
     setSessions((prev) =>
-      prev.map((s) =>
-        s.id === targetSessionId
+      prev.map((ses) =>
+        ses.id === targetSessionId
           ? {
-              ...s,
-              title: s.messages.length === 0 ? (text.slice(0, 26) + (text.length > 26 ? '...' : '')) : s.title,
+              ...ses,
+              title: ses.messages.length === 0 ? (text.slice(0, 26) + (text.length > 26 ? '...' : '')) : ses.title,
               messages: updated,
               updatedAt: Date.now(),
             }
-          : s
+          : ses
       )
     );
 
     setIsLoading(true);
+
+    const p = text.toLowerCase();
+    const isProposalIntent =
+      p.includes('propose') ||
+      p.includes('test') ||
+      p.includes('scan') ||
+      p.includes('audit') ||
+      p.includes('bola') ||
+      p.includes('bfla');
+
+    if (isProposalIntent) {
+      if (!backendSessionId || !activeSpec) {
+        const assistantMsg: ChatMessage = {
+          id: `m-${Date.now() + 1}`,
+          sender: 'assistant',
+          text:
+            `### No Active Assessment Session\n\n` +
+            `To formulate verified security test proposals, please connect or upload an OpenAPI specification first.\n` +
+            `Click **Connect Spec** in the top header or load an evaluator sample to create a backend session.`,
+          timestamp: 'Just now',
+        };
+        const finalMessages = [...updated, assistantMsg];
+        updateCurrentSessionMessages(finalMessages, targetSessionId);
+        setIsLoading(false);
+        return;
+      }
+
+      if (isGeneratingProposals) {
+        setIsLoading(false);
+        return;
+      }
+
+      setIsGeneratingProposals(true);
+      try {
+        const proposals = await fetchBackendProposals(backendSessionId, true);
+        const assistantMsg: ChatMessage = {
+          id: `m-${Date.now() + 1}`,
+          sender: 'assistant',
+          text:
+            proposals.length > 0
+              ? `### Security Test Proposals Formulated (${proposals.length})\n\n` +
+                `Formulated ${proposals.length} security test proposals for **${activeSpec.title}** via backend session \`${backendSessionId}\`.\n` +
+                `Each proposal requires your explicit operator approval before execution.\n\n` +
+                `Review the proposed test cards below, inspect the payload assertion previews, and click **Approve** or **Reject**:`
+              : `### No Security Proposals Generated\n\n` +
+                `The backend analyzed **${activeSpec.endpoints.length} endpoints** in session \`${backendSessionId}\`, ` +
+                `but no endpoints matched target authorization vectors (BOLA, BFLA, or Broken Authentication).`,
+          timestamp: 'Just now',
+          proposedTests: proposals.length > 0 ? proposals : undefined,
+        };
+        const finalMessages = [...updated, assistantMsg];
+        updateCurrentSessionMessages(finalMessages, targetSessionId);
+      } catch (err: any) {
+        const errorMsg: ChatMessage = {
+          id: `m-${Date.now() + 1}`,
+          sender: 'assistant',
+          text: `### Proposal Generation Failed\n\nBackend error: ${err.details || err.message || 'Unable to fetch proposals from backend.'}`,
+          timestamp: 'Just now',
+        };
+        const finalMessages = [...updated, errorMsg];
+        updateCurrentSessionMessages(finalMessages, targetSessionId);
+      } finally {
+        setIsGeneratingProposals(false);
+        setIsLoading(false);
+      }
+      return;
+    }
 
     try {
       const slmResult = await sendChatMessageToSLM(text, {
@@ -282,124 +354,102 @@ export function App() {
         endpointCount: activeSpec?.endpoints.length,
       });
 
-      let proposedTests: ProposedTest[] | undefined;
-      if (
-        (text.toLowerCase().includes('test') ||
-          text.toLowerCase().includes('propose') ||
-          text.toLowerCase().includes('scan') ||
-          text.toLowerCase().includes('audit') ||
-          text.toLowerCase().includes('bola')) &&
-        activeSpec
-      ) {
-        proposedTests = generateTestProposals(activeSpec);
-      }
-
       const assistantMsg: ChatMessage = {
         id: `m-${Date.now() + 1}`,
         sender: 'assistant',
         text: typeof slmResult === 'string' ? slmResult : slmResult.reply,
         timestamp: 'Just now',
-        proposedTests,
         reportOptions: typeof slmResult === 'object' ? slmResult.reportOptions : undefined,
       };
 
       const finalMessages = [...updated, assistantMsg];
-      setMessages(finalMessages);
-      setSessions((prev) =>
-        prev.map((s) =>
-          s.id === targetSessionId
-            ? { ...s, messages: finalMessages, updatedAt: Date.now() }
-            : s
-        )
-      );
+      updateCurrentSessionMessages(finalMessages, targetSessionId);
     } catch {
       const errorMsg: ChatMessage = {
         id: `m-${Date.now() + 1}`,
         sender: 'assistant',
-        text: 'Local SLM engine offline or initializing. Running simulated security heuristics.',
+        text: 'Local SLM engine offline or initializing. Please ensure the backend is connected.',
         timestamp: 'Just now',
       };
       const finalMessages = [...updated, errorMsg];
-      setMessages(finalMessages);
-      setSessions((prev) =>
-        prev.map((s) =>
-          s.id === targetSessionId
-            ? { ...s, messages: finalMessages, updatedAt: Date.now() }
-            : s
-        )
-      );
+      updateCurrentSessionMessages(finalMessages, targetSessionId);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Approve test
+  // Approve test (Phase 2: Transition to APPROVED via backend without execution)
   const handleApproveTest = async (testId: string) => {
-    // 1. Mark running
-    const runningList = messages.map((msg) => {
-      if (!msg.proposedTests) return msg;
-      return {
-        ...msg,
-        proposedTests: msg.proposedTests.map((t) =>
-          t.testId === testId ? { ...t, status: 'running' as const } : t
-        ),
-      };
-    });
-    updateCurrentSessionMessages(runningList);
-
-    // 2. Find and execute test
-    let targetTest: ProposedTest | undefined;
-    for (const m of messages) {
-      targetTest = m.proposedTests?.find((t) => t.testId === testId);
-      if (targetTest) break;
+    if (!backendSessionId) {
+      alert('No active backend assessment session. Please upload a specification first.');
+      return;
     }
+    if (pendingProposalActions[testId]) return;
 
-    if (!targetTest) return;
+    setPendingProposalActions((prev) => ({ ...prev, [testId]: true }));
 
-    const { updatedTest, finding } = await executeApprovedTest(targetTest);
+    try {
+      const updatedBackendTest = await approveProposal(backendSessionId, testId);
 
-    // 3. Update completed test
-    const completedList = runningList.map((msg) => {
-      if (!msg.proposedTests) return msg;
-      return {
-        ...msg,
-        proposedTests: msg.proposedTests.map((t) =>
-          t.testId === testId ? updatedTest : t
-        ),
-        findings: finding ? [...(msg.findings || []), finding] : msg.findings,
-      };
-    });
+      const updatedMessages = messages.map((msg) => {
+        if (!msg.proposedTests) return msg;
+        return {
+          ...msg,
+          proposedTests: msg.proposedTests.map((t) =>
+            t.testId === testId
+              ? {
+                  ...t,
+                  status: 'approved' as const,
+                  approvedAt: updatedBackendTest.approved_at,
+                }
+              : t
+          ),
+        };
+      });
 
-    const replyMsg: ChatMessage = {
-      id: `m-${Date.now()}`,
-      sender: 'assistant',
-      text: finding
-        ? `### Test Execution Complete: Defect Replicated\n\n` +
-          `The probe assertion on \`${targetTest.method} ${targetTest.endpoint}\` completed with **HTTP 200 OK**. ` +
-          `Our trained ML priority model evaluated the vector and recommended **${finding.severity}**. ` +
-          `Detailed evidence and defensive remediation steps have been recorded below.`
-        : `### Test Execution Complete: Defense Verified\n\n` +
-          `The target endpoint \`${targetTest.method} ${targetTest.endpoint}\` defended against the probe assertion ` +
-          `with HTTP 403 Forbidden. Tenancy isolation verified for this vector.`,
-      timestamp: 'Just now',
-      findings: finding ? [finding] : undefined,
-    };
-
-    updateCurrentSessionMessages([...completedList, replyMsg]);
+      updateCurrentSessionMessages(updatedMessages);
+    } catch (err: any) {
+      alert(`Backend rejected proposal approval: ${err.details || err.message}`);
+    } finally {
+      setPendingProposalActions((prev) => ({ ...prev, [testId]: false }));
+    }
   };
 
-  // Reject test
-  const handleRejectTest = (testId: string) => {
-    const updated = messages.map((msg) => {
-      if (!msg.proposedTests) return msg;
-      return {
-        ...msg,
-        proposedTests: msg.proposedTests.map((t) =>
-          t.testId === testId ? { ...t, status: 'rejected' as const } : t
-        ),
-      };
-    });
-    updateCurrentSessionMessages(updated);
+  // Reject test (Phase 2: Transition to REJECTED via backend)
+  const handleRejectTest = async (testId: string) => {
+    if (!backendSessionId) {
+      alert('No active backend assessment session. Please upload a specification first.');
+      return;
+    }
+    if (pendingProposalActions[testId]) return;
+
+    setPendingProposalActions((prev) => ({ ...prev, [testId]: true }));
+
+    try {
+      const updatedBackendTest = await rejectProposal(backendSessionId, testId);
+
+      const updatedMessages = messages.map((msg) => {
+        if (!msg.proposedTests) return msg;
+        return {
+          ...msg,
+          proposedTests: msg.proposedTests.map((t) =>
+            t.testId === testId
+              ? {
+                  ...t,
+                  status: 'rejected' as const,
+                  rejectedAt: updatedBackendTest.rejected_at,
+                }
+              : t
+          ),
+        };
+      });
+
+      updateCurrentSessionMessages(updatedMessages);
+    } catch (err: any) {
+      alert(`Backend rejected proposal rejection: ${err.details || err.message}`);
+    } finally {
+      setPendingProposalActions((prev) => ({ ...prev, [testId]: false }));
+    }
   };
 
   // Open Report Modal
@@ -462,6 +512,7 @@ export function App() {
               onResetSession={handleNewChat}
               backendOnline={backendOnline}
               isLoading={isLoading}
+              pendingTestIds={pendingProposalActions}
               onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
             />
           )}

@@ -7,7 +7,8 @@ import type {
   AssessmentReport,
   HttpMethod,
 } from '../types/assistant';
-import { analyzeFinding } from './api';
+import { analyzeFinding, getProposals } from './api';
+import { mapBackendProposedTestToUI } from './proposalAdapter';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
@@ -275,73 +276,18 @@ function generateClientSLMResponse(prompt: string, context?: any): SLMChatResult
 /**
  * Generate Human-in-the-Loop test proposals for an API Spec
  */
-export function generateTestProposals(spec: ApiSpec): ProposedTest[] {
-  const tests: ProposedTest[] = [];
-
-  for (const ep of spec.endpoints) {
-    if (ep.potentialRisks.some((r) => r.includes('BOLA'))) {
-      tests.push({
-        testId: `test-bola-${ep.id}`,
-        title: `Verify Object Tenancy Isolation on ${ep.path}`,
-        endpoint: ep.path,
-        method: ep.method,
-        vulnerabilityType: 'bola',
-        rationale: `Asserts that request with an unprivileged foreign token receives HTTP 403 Forbidden rather than private tenant records.`,
-        payloadPreview: `GET ${ep.path.replace('{id}', 'tenant_usr_9921')} -H "Authorization: Bearer unprivileged_token"`,
-        estimatedRisk: 'P1',
-        status: 'proposed',
-      });
-    }
-
-    if (ep.potentialRisks.some((r) => r.includes('BFLA'))) {
-      tests.push({
-        testId: `test-bfla-${ep.id}`,
-        title: `Verify Role Authorization on Administrative Routine ${ep.path}`,
-        endpoint: ep.path,
-        method: ep.method,
-        vulnerabilityType: 'bfla',
-        rationale: `Checks if standard member roles are rejected with HTTP 403 when invoking administrative endpoints.`,
-        payloadPreview: `POST ${ep.path} -H "Authorization: Bearer standard_role_token"`,
-        estimatedRisk: 'P2',
-        status: 'proposed',
-      });
-    }
-
-    if (ep.potentialRisks.some((r) => r.includes('Mass Assignment'))) {
-      tests.push({
-        testId: `test-mass-${ep.id}`,
-        title: `Test Strict DTO Whitelist on ${ep.path}`,
-        endpoint: ep.path,
-        method: ep.method,
-        vulnerabilityType: 'mass_assignment',
-        rationale: `Injects unauthorized attributes ("is_admin": true, "role": "superadmin") to assert that the schema binder rejects untrusted properties with HTTP 422.`,
-        payloadPreview: `PUT ${ep.path} -d '{"is_admin": true, "billing_tier": "enterprise_exempt"}'`,
-        estimatedRisk: 'P2',
-        status: 'proposed',
-      });
-    }
-
-    if (ep.potentialRisks.some((r) => r.includes('Information Disclosure'))) {
-      tests.push({
-        testId: `test-info-${ep.id}`,
-        title: `Inspect Diagnostic Disclosure on ${ep.path}`,
-        endpoint: ep.path,
-        method: ep.method,
-        vulnerabilityType: 'information_disclosure',
-        rationale: `Verifies that diagnostic routes are gated and do not leak environment keys or database strings.`,
-        payloadPreview: `GET ${ep.path}`,
-        estimatedRisk: 'P1',
-        status: 'proposed',
-      });
-    }
-  }
-
-  return tests.slice(0, 4); // Deliver high-signal top tests
+export async function fetchBackendProposals(
+  sessionId: string,
+  includeAuth: boolean = true
+): Promise<ProposedTest[]> {
+  const backendProposals = await getProposals(sessionId, includeAuth);
+  return backendProposals.map(mapBackendProposedTestToUI);
 }
 
-/**
- * Execute an approved test and generate a verified finding through ML priority scoring
- */
+export function generateTestProposals(_spec: ApiSpec): ProposedTest[] {
+  return [];
+}
+
 export async function executeApprovedTest(
   test: ProposedTest
 ): Promise<{ updatedTest: ProposedTest; finding?: SecurityFindingReportItem }> {

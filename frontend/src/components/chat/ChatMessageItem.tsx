@@ -1,20 +1,15 @@
 import React, { useState } from 'react';
 import {
-  User,
   Shield,
   ShieldAlert,
   CheckCircle2,
   XCircle,
-  Copy,
-  Check,
   ChevronDown,
   ChevronUp,
-  Sparkles,
   Play,
-  ArrowRight,
   FileText,
 } from 'lucide-react';
-import type { ChatMessage, ProposedTest } from '../../types/assistant';
+import type { ChatMessage } from '../../types/assistant';
 import { MarkdownRenderer } from './MarkdownRenderer';
 
 interface ChatMessageItemProps {
@@ -22,6 +17,7 @@ interface ChatMessageItemProps {
   onApproveTest: (testId: string) => void;
   onRejectTest: (testId: string) => void;
   onSelectReportOption?: (optionId: string) => void;
+  pendingTestIds?: Record<string, boolean>;
 }
 
 export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
@@ -29,16 +25,10 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
   onApproveTest,
   onRejectTest,
   onSelectReportOption,
+  pendingTestIds,
 }) => {
   const isAssistant = message.sender === 'assistant';
-  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [expandedTests, setExpandedTests] = useState<Record<string, boolean>>({});
-
-  const handleCopy = (text: string, id: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
-  };
 
   const toggleTestExpand = (testId: string) => {
     setExpandedTests((prev) => ({
@@ -47,7 +37,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
     }));
   };
 
-  // If User Message: Vibrant pink/fuchsia bubble aligned to right (as in Dribbble reference)
+  // If User Message: Vibrant pink/fuchsia bubble aligned to right
   if (!isAssistant) {
     return (
       <div className="py-1 px-1 sm:px-2 flex justify-end animate-in fade-in duration-200">
@@ -98,7 +88,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
             {/* Markdown Text */}
             <MarkdownRenderer content={message.text} />
 
-            {/* Interactive Report Document Options (When user requests report generation) */}
+            {/* Interactive Report Document Options */}
             {message.reportOptions && message.reportOptions.length > 0 && (
               <div className="mt-3 space-y-2 pt-2.5 border-t border-slate-700/50">
                 <div className="text-[11px] font-semibold text-slate-300 flex items-center gap-1.5">
@@ -145,6 +135,8 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
                 <div className="grid grid-cols-1 gap-2">
                   {message.proposedTests.map((test) => {
                     const isExpanded = expandedTests[test.testId];
+                    const isPending = Boolean(pendingTestIds?.[test.testId]);
+
                     return (
                       <div
                         key={test.testId}
@@ -186,24 +178,43 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
 
                           {/* Action Buttons */}
                           <div className="flex items-center gap-1 shrink-0">
-                            {test.status === 'proposed' && (
+                            {isPending ? (
+                              <div className="px-2.5 py-0.5 rounded-full bg-slate-800 text-pink-300 text-[11px] font-mono flex items-center gap-1 border border-pink-700/40">
+                                <span className="w-1.5 h-1.5 rounded-full bg-pink-400 animate-ping" />
+                                <span>Updating...</span>
+                              </div>
+                            ) : test.status === 'proposed' ? (
                               <>
                                 <button
                                   onClick={() => onApproveTest(test.testId)}
-                                  className="px-2.5 py-1 rounded-full bg-gradient-to-r from-pink-500 to-rose-400 hover:opacity-90 text-white text-[11px] font-semibold shadow-xs flex items-center gap-1 transition-all"
-                                  title="Approve and execute safe probe"
+                                  className="px-2.5 py-1 rounded-full bg-gradient-to-r from-pink-500 to-rose-400 hover:opacity-90 text-white text-[11px] font-semibold shadow-xs flex items-center gap-1 transition-all active:scale-95"
+                                  title="Approve proposed security probe"
                                 >
                                   <Play className="w-2.5 h-2.5 fill-current" />
                                   <span>Approve</span>
                                 </button>
                                 <button
                                   onClick={() => onRejectTest(test.testId)}
-                                  className="px-2 py-1 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 text-[11px] font-medium transition-colors"
+                                  className="px-2 py-1 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 text-[11px] font-medium transition-colors active:scale-95"
                                   title="Reject probe"
                                 >
                                   Reject
                                 </button>
                               </>
+                            ) : null}
+
+                            {test.status === 'approved' && (
+                              <div className="px-2.5 py-0.5 rounded-full bg-pink-900/40 text-pink-300 text-[11px] font-medium flex items-center gap-1 border border-pink-700/50">
+                                <CheckCircle2 className="w-3 h-3 text-pink-400" />
+                                <span>Approved</span>
+                              </div>
+                            )}
+
+                            {test.status === 'rejected' && (
+                              <div className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 text-[11px] font-medium border border-slate-700/60 flex items-center gap-1">
+                                <XCircle className="w-3 h-3 text-slate-500" />
+                                <span>Rejected</span>
+                              </div>
                             )}
 
                             {test.status === 'running' && (
@@ -217,12 +228,6 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
                               <div className="px-2 py-0.5 rounded-full bg-emerald-900/40 text-emerald-400 text-[11px] font-medium flex items-center gap-1 border border-emerald-700/50">
                                 <CheckCircle2 className="w-3 h-3" />
                                 <span>Verified</span>
-                              </div>
-                            )}
-
-                            {test.status === 'rejected' && (
-                              <div className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-500 text-[11px] font-medium">
-                                Skipped
                               </div>
                             )}
 
@@ -250,6 +255,16 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
                             <div className="bg-[#0d1017] rounded-lg p-2 font-mono text-[10px] text-slate-400 border border-slate-700/50 overflow-x-auto">
                               <code>{test.payloadPreview}</code>
                             </div>
+                            {test.approvedAt && (
+                              <div className="text-[10px] text-pink-300 font-mono">
+                                Approved at: {new Date(test.approvedAt).toLocaleTimeString()}
+                              </div>
+                            )}
+                            {test.rejectedAt && (
+                              <div className="text-[10px] text-slate-400 font-mono">
+                                Rejected at: {new Date(test.rejectedAt).toLocaleTimeString()}
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>

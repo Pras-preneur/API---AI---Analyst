@@ -29,6 +29,7 @@ export interface ApiSpec {
   endpoints: ApiEndpoint[];
   rawContent?: string;
   format: 'json' | 'yaml';
+  sessionId?: string;
 }
 
 export type TestStatus = 'proposed' | 'approved' | 'rejected' | 'running' | 'completed' | 'failed';
@@ -43,6 +44,8 @@ export interface ProposedTest {
   payloadPreview: string;
   estimatedRisk: 'P1' | 'P2' | 'P3';
   status: TestStatus;
+  approvedAt?: string;
+  rejectedAt?: string;
   executionEvidence?: {
     httpStatus: number;
     responseSnippet: string;

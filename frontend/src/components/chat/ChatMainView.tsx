@@ -20,6 +20,7 @@ interface ChatMainViewProps {
   onApproveTest: (testId: string) => void;
   onRejectTest: (testId: string) => void;
   onSelectReportOption?: (optionId: string) => void;
+  pendingTestIds?: Record<string, boolean>;
   onOpenInventory: () => void;
   onOpenUpload: () => void;
   onOpenReport: () => void;
