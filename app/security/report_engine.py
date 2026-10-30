@@ -134,12 +134,18 @@ def _evidence_summary(finding: Finding) -> dict:
     """
     resp = finding.evidence.response or {}
     sanitized_resp = sanitize_data(resp)
-    return {
+    req = finding.evidence.request or {}
+    sanitized_req = sanitize_data(req)
+
+    summary = {
         "status_code": sanitized_resp.get("status_code"),
         # Include the body only when it is a non-empty dict (JSON response).
         # Raw text bodies may be large; we omit them from the report summary.
         "response_body_present": bool(sanitized_resp.get("body")),
     }
+    if sanitized_req.get("headers"):
+        summary["sanitized_request_headers"] = sanitized_req.get("headers")
+    return summary
 
 
 def _resolve_category(
@@ -318,6 +324,23 @@ def generate_report(session: Session, target_base_url: str) -> Report:
         pending_review=pending_review,
     )
 
+    endpoints_cataloged = [
+        {"method": ep.method, "path": ep.path}
+        for ep in (session.endpoints or [])
+    ]
+
+    retesting_guidance = (
+        "To verify remediations, re-execute the approved test proposals against the patched target. "
+        "Fresh network execution collects updated evidence; previously confirmed findings will "
+        "require human re-review while maintaining full audit history."
+    )
+
+    methodology = (
+        "Automated differential security probes with human-in-the-loop verification. "
+        "Tests detect Broken Object Level Authorization (BOLA), Broken Function Level "
+        "Authorization (BFLA), and Missing Credentials. Scanners never mark findings CONFIRMED autonomously."
+    )
+
     return Report(
         session_id=session.session_id,
         target_base_url=target_base_url,
@@ -328,4 +351,7 @@ def generate_report(session: Session, target_base_url: str) -> Report:
         failed_tests=failed_ids,
         execution_statistics=execution_statistics,
         pending_review_count=pending_review,
+        endpoints_cataloged=endpoints_cataloged,
+        retesting_guidance=retesting_guidance,
+        methodology=methodology,
     )

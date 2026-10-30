@@ -29,7 +29,7 @@ from .security.evidence_validator import validate_human_review_evidence
 
 
 
-from fastapi import FastAPI, File, UploadFile, HTTPException, Header, Request
+from fastapi import FastAPI, File, UploadFile, HTTPException, Header, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(title="API Security Assistant")
@@ -43,7 +43,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Content-Type", "X-Session-ID", "Accept", "Authorization"],
-    expose_headers=["X-Session-ID"],
+    expose_headers=["X-Session-ID", "Content-Disposition"],
 )
 
 
@@ -371,3 +371,62 @@ async def get_report(
     except KeyError:
         raise HTTPException(status_code=404, detail="Report not found")
     return report.dict()
+
+
+from .security.pdf_export import generate_pdf_report as _generate_pdf_report
+from .security.json_export import export_report_to_json as _export_report_to_json
+
+
+@app.get("/reports/{report_id}/pdf")
+async def get_report_pdf(
+    report_id: str,
+    x_session_id: str = Header(..., alias="X-Session-ID"),
+):
+    """Export an in-memory assessment report as a styled, paginated PDF document."""
+    try:
+        session = session_store.get_session(x_session_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Session not found")
+    try:
+        report = session.get_report(report_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    pdf_bytes = _generate_pdf_report(report)
+    filename = f"report-{report_id}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+        },
+    )
+
+
+@app.get("/reports/{report_id}/json")
+async def get_report_json(
+    report_id: str,
+    x_session_id: str = Header(..., alias="X-Session-ID"),
+):
+    """Export an in-memory assessment report as a structured, sanitized JSON document."""
+    try:
+        session = session_store.get_session(x_session_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Session not found")
+    try:
+        report = session.get_report(report_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    json_str = _export_report_to_json(report)
+    filename = f"report-{report_id}.json"
+    return Response(
+        content=json_str,
+        media_type="application/json",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+        },
+    )
+

@@ -451,6 +451,9 @@ class Report(BaseModel):
     # Stage 5 additions: execution statistics and review status counters
     execution_statistics: Dict[str, int] = Field(default_factory=dict)
     pending_review_count: int = 0
+    endpoints_cataloged: List[Dict[str, str]] = Field(default_factory=list)
+    retesting_guidance: Optional[str] = None
+    methodology: Optional[str] = None
 
 
 # Session model – holds proposals, findings, and reports per user workflow

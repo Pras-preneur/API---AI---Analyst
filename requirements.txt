@@ -8,3 +8,4 @@ pytest
 python-multipart
 httpx2
 rich
+reportlab>=4.0.0
