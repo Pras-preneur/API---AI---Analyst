@@ -25,6 +25,7 @@ from .models import (
 
 from .parser.openapi_parser import EndpointModel, parse_openapi
 from .security.proposal_engine import generate_proposals
+from .security.evidence_validator import validate_human_review_evidence
 
 
 
@@ -281,33 +282,9 @@ async def review_finding(
     except KeyError:
         raise HTTPException(status_code=404, detail="Finding not found")
 
-    # Guard 1: Only COMPLETED executions can be confirmed
+    # Validate execution status, evidence integrity, and outcome consistency
     if review.outcome == HumanReviewOutcome.CONFIRMED:
-        if finding.execution_status != ExecutionStatus.COMPLETED:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Cannot confirm finding with execution status '{finding.execution_status}'. "
-                       f"Only COMPLETED executions can be confirmed as vulnerabilities.",
-            )
-
-        # Guard 2: Require sufficient and non-inconclusive evidence
-        resp = finding.evidence.response if finding.evidence else None
-        has_valid_resp = bool(resp and isinstance(resp, dict) and (resp.get("status_code") or len(resp) > 0))
-        if not resp or not isinstance(resp, dict) or not has_valid_resp:
-            raise HTTPException(
-                status_code=400,
-                detail="Cannot confirm finding without valid HTTP response evidence.",
-            )
-        if finding.assessment_outcome == AssessmentOutcome.INCONCLUSIVE:
-            raise HTTPException(
-                status_code=400,
-                detail="Cannot confirm finding when automated assessment outcome is INCONCLUSIVE (insufficient evidence).",
-            )
-        if finding.assessment_outcome == AssessmentOutcome.ACCESS_DENIED:
-            raise HTTPException(
-                status_code=400,
-                detail="Cannot confirm finding when access was denied (endpoint enforced authorization boundary).",
-            )
+        validate_human_review_evidence(finding)
 
     # Validate human review constraints
     try:
