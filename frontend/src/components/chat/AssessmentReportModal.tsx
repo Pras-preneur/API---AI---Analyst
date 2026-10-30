@@ -7,6 +7,7 @@ import {
   Check,
 } from 'lucide-react';
 import type { AssessmentReport } from '../../types/assistant';
+import { downloadReportPdf, downloadReportJson } from '../../services/api';
 import { MarkdownRenderer } from './MarkdownRenderer';
 
 interface AssessmentReportModalProps {
@@ -23,6 +24,8 @@ export const AssessmentReportModal: React.FC<AssessmentReportModalProps> = ({
   if (!isOpen || !report) return null;
 
   const [copied, setCopied] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [downloadingJson, setDownloadingJson] = useState(false);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(report.markdownContent);
@@ -40,7 +43,24 @@ export const AssessmentReportModal: React.FC<AssessmentReportModalProps> = ({
     URL.revokeObjectURL(url);
   };
 
-  const handleDownloadJSON = () => {
+  const handleDownloadJSON = async () => {
+    if (report.backendReportId && report.sessionId) {
+      try {
+        setDownloadingJson(true);
+        const blob = await downloadReportJson(report.sessionId, report.backendReportId);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `report-${report.backendReportId}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        return;
+      } catch (err) {
+        console.warn('Backend JSON export failed, falling back to client JSON:', err);
+      } finally {
+        setDownloadingJson(false);
+      }
+    }
     const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -48,6 +68,27 @@ export const AssessmentReportModal: React.FC<AssessmentReportModalProps> = ({
     a.download = `API-Security-Assessment-${report.specTitle.replace(/\s+/g, '-')}.json`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadPDF = async () => {
+    if (report.backendReportId && report.sessionId) {
+      try {
+        setDownloadingPdf(true);
+        const blob = await downloadReportPdf(report.sessionId, report.backendReportId);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `report-${report.backendReportId}.pdf`;
+        a.click();
+        URL.revokeObjectURL(url);
+        return;
+      } catch (err) {
+        console.warn('Backend PDF export failed, falling back to window.print():', err);
+      } finally {
+        setDownloadingPdf(false);
+      }
+    }
+    window.print();
   };
 
   return (
@@ -122,11 +163,21 @@ export const AssessmentReportModal: React.FC<AssessmentReportModalProps> = ({
 
           <div className="flex items-center gap-2.5">
             <button
+              onClick={handleDownloadPDF}
+              disabled={downloadingPdf}
+              className="px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-mono flex items-center gap-1.5 transition-colors disabled:opacity-50"
+            >
+              <FileDown className="w-3.5 h-3.5 text-rose-600" />
+              <span>{downloadingPdf ? 'Exporting PDF...' : 'Download PDF'}</span>
+            </button>
+
+            <button
               onClick={handleDownloadJSON}
-              className="px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-mono flex items-center gap-1.5 transition-colors"
+              disabled={downloadingJson}
+              className="px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-mono flex items-center gap-1.5 transition-colors disabled:opacity-50"
             >
               <Download className="w-3.5 h-3.5 text-sky-600" />
-              <span>Download JSON</span>
+              <span>{downloadingJson ? 'Exporting JSON...' : 'Download JSON'}</span>
             </button>
 
             <button

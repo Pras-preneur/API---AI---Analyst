@@ -14,6 +14,8 @@ import {
   reviewFinding,
   createReport,
   getReport,
+  downloadReportPdf,
+  downloadReportJson,
 } from '../api';
 
 describe('Frontend API Service Layer', () => {
@@ -421,6 +423,45 @@ describe('Frontend API Service Layer', () => {
         expect.objectContaining({
           method: 'GET',
           headers: expect.objectContaining({ 'X-Session-ID': sessionId }),
+        })
+      );
+    });
+
+    it('downloadReportPdf fetches PDF blob with session header', async () => {
+      const mockPdfBlob = new Blob(['%PDF-1.4 mock content'], { type: 'application/pdf' });
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        blob: async () => mockPdfBlob,
+      } as Response);
+
+      const blob = await downloadReportPdf(sessionId, 'rep-abc-123');
+      expect(blob.type).toBe('application/pdf');
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/reports/rep-abc-123/pdf'),
+        expect.objectContaining({
+          method: 'GET',
+          headers: expect.objectContaining({ 'X-Session-ID': sessionId }),
+        })
+      );
+    });
+
+    it('downloadReportJson fetches JSON blob with session header', async () => {
+      const mockJsonBlob = new Blob(['{"report_id": "rep-abc-123"}'], { type: 'application/json' });
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        blob: async () => mockJsonBlob,
+      } as Response);
+
+      const blob = await downloadReportJson(sessionId, 'rep-abc-123');
+      expect(blob.type).toBe('application/json');
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/reports/rep-abc-123/json'),
+        expect.objectContaining({
+          method: 'GET',
+          headers: expect.objectContaining({
+            'X-Session-ID': sessionId,
+            Accept: 'application/json',
+          }),
         })
       );
     });

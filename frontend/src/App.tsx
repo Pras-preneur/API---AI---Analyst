@@ -4,6 +4,7 @@ import type {
   BackendExecutionConfig,
   BackendFindingReviewRequest,
   BackendFinding,
+  BackendReport,
 } from './types/backend';
 import React, { useState, useEffect } from 'react';
 import { ClaudeSidebar } from './components/layout/ClaudeSidebar';
@@ -31,7 +32,7 @@ import {
   fetchBackendProposals,
   generateAssessmentReport,
 } from './services/chatService';
-import { checkBackendHealth, approveProposal, rejectProposal, executeTests, reviewFinding } from './services/api';
+import { checkBackendHealth, approveProposal, rejectProposal, executeTests, reviewFinding, createReport } from './services/api';
 import { Layers, ShieldAlert, FileDown, Plus, FileCode, CheckCircle2 } from 'lucide-react';
 
 const INITIAL_GREETING: ChatMessage = {
@@ -573,7 +574,7 @@ export function App() {
   };
 
   // Open Report Modal
-  const handleOpenReport = () => {
+  const handleOpenReport = async () => {
     if (!activeSpec) return;
     const allTests: ProposedTest[] = [];
     const allFindings: SecurityFindingReportItem[] = [];
@@ -583,7 +584,22 @@ export function App() {
       if (m.findings) allFindings.push(...m.findings);
     });
 
-    const report = generateAssessmentReport(activeSpec, allTests, allFindings);
+    let backendReport: BackendReport | undefined = undefined;
+    if (backendSessionId) {
+      try {
+        backendReport = await createReport(backendSessionId, 'http://127.0.0.1:8001');
+      } catch (err) {
+        console.warn('Backend report generation failed, falling back to local session data:', err);
+      }
+    }
+
+    const report = generateAssessmentReport(
+      activeSpec,
+      allTests,
+      allFindings,
+      backendReport,
+      backendSessionId || undefined
+    );
     setCurrentReport(report);
     setReportOpen(true);
   };

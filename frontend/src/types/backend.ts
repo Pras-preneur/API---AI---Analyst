@@ -127,6 +127,9 @@ export interface BackendReport {
   scope_and_limitations: string;
   execution_statistics: Record<string, number>;
   pending_review_count: number;
+  endpoints_cataloged?: Array<{ method?: string; path?: string }>;
+  retesting_guidance?: string;
+  methodology?: string;
 }
 
 export interface BackendTestIdentity {

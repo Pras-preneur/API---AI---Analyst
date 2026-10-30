@@ -422,6 +422,61 @@ export async function getReport(
 }
 
 // ============================================================================
+/**
+ * Download a styled PDF security assessment report from the backend.
+ * GET /reports/{report_id}/pdf
+ * Header: X-Session-ID
+ */
+export async function downloadReportPdf(
+  sessionId: string,
+  reportId: string,
+  baseUrl: string = API_BASE_URL
+): Promise<Blob> {
+  if (!sessionId) throw new ApiError('Session ID is required.', 400);
+  if (!reportId) throw new ApiError('Report ID is required.', 400);
+
+  const response = await fetch(`${baseUrl}/reports/${reportId}/pdf`, {
+    method: 'GET',
+    headers: {
+      'X-Session-ID': sessionId,
+    },
+  });
+
+  if (!response.ok) {
+    throw await parseErrorResponse(response, `Failed to download PDF for report ${reportId}.`);
+  }
+
+  return response.blob();
+}
+
+/**
+ * Download a structured, evidence-sanitized JSON report from the backend.
+ * GET /reports/{report_id}/json
+ * Header: X-Session-ID
+ */
+export async function downloadReportJson(
+  sessionId: string,
+  reportId: string,
+  baseUrl: string = API_BASE_URL
+): Promise<Blob> {
+  if (!sessionId) throw new ApiError('Session ID is required.', 400);
+  if (!reportId) throw new ApiError('Report ID is required.', 400);
+
+  const response = await fetch(`${baseUrl}/reports/${reportId}/json`, {
+    method: 'GET',
+    headers: {
+      'X-Session-ID': sessionId,
+      Accept: 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    throw await parseErrorResponse(response, `Failed to download JSON for report ${reportId}.`);
+  }
+
+  return response.blob();
+}
+
 // Legacy / Advisory Functions (Preserved for existing workspace tabs)
 // ============================================================================
 

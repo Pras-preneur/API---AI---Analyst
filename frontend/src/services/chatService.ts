@@ -1,4 +1,5 @@
 import { load as yamlLoad } from 'js-yaml';
+import type { BackendReport } from '../types/backend';
 import type {
   ApiSpec,
   ApiEndpoint,
@@ -396,13 +397,105 @@ export async function executeApprovedTest(
 export function generateAssessmentReport(
   spec: ApiSpec,
   tests: ProposedTest[],
-  findings: SecurityFindingReportItem[]
+  findings: SecurityFindingReportItem[],
+  backendReport?: BackendReport,
+  sessionId?: string
 ): AssessmentReport {
-  const p1Count = findings.filter((f) => f.severity === 'P1').length;
-  const p2Count = findings.filter((f) => f.severity === 'P2').length;
-  const p3Count = findings.filter((f) => f.severity === 'P3').length;
+  const p1Count = backendReport?.severity_counts
+    ? backendReport.severity_counts.critical
+    : findings.filter((f) => f.severity === 'P1').length;
+  const p2Count = backendReport?.severity_counts
+    ? backendReport.severity_counts.high
+    : findings.filter((f) => f.severity === 'P2').length;
+  const p3Count = backendReport?.severity_counts
+    ? backendReport.severity_counts.medium
+    : findings.filter((f) => f.severity === 'P3').length;
 
-  const markdownContent = `# API Security Assessment Report
+  const totalEndpoints = backendReport?.endpoints_cataloged?.length || spec.endpoints.length;
+  const testsProposed = backendReport?.execution_statistics?.total_proposals ?? tests.length;
+  const testsExecuted =
+    backendReport?.execution_statistics?.executed_tests ??
+    tests.filter((t) => t.status === 'completed').length;
+  const confirmedVulns = backendReport?.execution_statistics?.confirmed_findings ?? findings.length;
+  const suspectedVulns = backendReport?.execution_statistics?.suspected_findings ?? 0;
+  const pendingReview = backendReport?.execution_statistics?.pending_review ?? 0;
+
+  let markdownContent = '';
+  if (backendReport) {
+    markdownContent = `# API Security Assessment Report
+
+**Target Base URL**: \`${backendReport.target_base_url}\`  
+**Specification**: ${spec.title} (v${spec.version})  
+**Report ID**: \`${backendReport.report_id}\`  
+**Session ID**: \`${backendReport.session_id}\`  
+**Generated At**: ${new Date(backendReport.generated_at).toLocaleString()}  
+**Assessor**: API Security Testing Assistant (Verified Differential Scanner)  
+
+---
+
+## 1. Executive Summary
+
+${backendReport.assessment_summary}
+
+| Metric | Count | Status / Notes |
+| :--- | :--- | :--- |
+| **Cataloged Endpoints** | ${totalEndpoints} | Discovered from OpenAPI schema |
+| **Proposals Formulated** | ${testsProposed} | Targeted authorization & auth probes |
+| **Tests Executed** | ${testsExecuted} | Executed with explicit operator approval |
+| **Confirmed Vulnerabilities** | **${confirmedVulns}** | Conclusively verified via human review |
+| **Suspected Findings** | ${suspectedVulns} | Initial scanner indications |
+| **Pending Human Review** | ${pendingReview} | Awaiting operator inspection |
+| **Critical Severity** | ${p1Count} | Immediate remediation priority |
+| **High Severity** | ${p2Count} | High priority fix |
+| **Medium Severity** | ${p3Count} | Moderate risk exposure |
+
+---
+
+## 2. Technical Vulnerability Findings
+
+${
+  backendReport.finding_details && backendReport.finding_details.length > 0
+    ? backendReport.finding_details
+        .map(
+          (f, idx) => `### [${f.severity.toUpperCase()}] ${idx + 1}. ${f.title}
+- **Endpoint**: \`${f.endpoint_method || ''} ${f.endpoint_path}\`
+- **Category**: \`${f.test_category}\`
+- **Status / Outcome**: \`${f.assessment_outcome || f.status}\`
+- **Human Review**: ${
+            f.is_human_reviewed
+              ? `Confirmed by **${f.reviewer_id || 'analyst'}**${f.reviewed_at ? ` on ${new Date(f.reviewed_at).toLocaleString()}` : ''}`
+              : f.requires_re_review
+              ? '**Requires Re-Review** (Prior review invalidated by fresh execution)'
+              : '_Pending Human Review_'
+          }
+- **Observed Behavior**: ${f.observed_behavior}
+- **Sanitized Evidence Summary**:
+\`\`\`json
+${JSON.stringify(f.evidence_summary || {}, null, 2)}
+\`\`\`
+${f.assessment_reason ? `- **Assessment Notes**: ${f.assessment_reason}\n` : ''}${
+            f.reviewer_notes ? `- **Reviewer Notes**: ${f.reviewer_notes}\n` : ''
+          }
+**Recommended Remediation**:
+${f.recommended_remediation}
+`
+        )
+        .join('\n---\n\n')
+    : '_No vulnerability findings recorded for this session._'
+}
+
+---
+
+## 3. Scope, Limitations & Governance
+
+- **Execution Boundary**: ${backendReport.scope_and_limitations}
+- **Evidence Integrity**: All authorization headers, bearer tokens, passwords, and sensitive API keys are rigorously sanitized and redacted.
+- **Human-in-the-Loop Veracity**: Scanners provide initial differential evidence; only explicit operator review can mark findings as confirmed.
+- **Retesting Guidance**: ${backendReport.retesting_guidance || 'To verify fixes, patch target services and re-execute approved test proposals.'}
+`;
+  } else {
+    // Legacy fallback
+    markdownContent = `# API Security Assessment Report
 
 **Target Specification**: ${spec.title} (v${spec.version})  
 **Generated At**: ${new Date().toLocaleString()}  
@@ -460,22 +553,28 @@ ${f.validation.join('\n')}
 - Scanner verdicts remain immutable boundary facts.
 - Analysis synthesized locally with zero third-party cloud data transmission.
 `;
+  }
 
   return {
-    reportId: `REP-${Date.now().toString().slice(-6)}`,
+    reportId: backendReport?.report_id || `REP-${Date.now().toString().slice(-6)}`,
     title: `Security Assessment Report: ${spec.title}`,
     specTitle: spec.title,
-    generatedAt: new Date().toLocaleDateString(),
+    generatedAt: backendReport?.generated_at
+      ? new Date(backendReport.generated_at).toLocaleDateString()
+      : new Date().toLocaleDateString(),
     summary: {
-      totalEndpoints: spec.endpoints.length,
-      testsProposed: tests.length,
-      testsExecuted: tests.filter((t) => t.status === 'completed').length,
-      confirmedVulnerabilities: findings.length,
+      totalEndpoints,
+      testsProposed,
+      testsExecuted,
+      confirmedVulnerabilities: confirmedVulns,
       p1Count,
       p2Count,
       p3Count,
     },
     findings,
     markdownContent,
+    backendReportId: backendReport?.report_id,
+    sessionId: sessionId || backendReport?.session_id,
+    backendReport,
   };
 }

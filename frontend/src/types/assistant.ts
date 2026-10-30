@@ -1,4 +1,4 @@
-import type { BackendFinding } from './backend';
+import type { BackendFinding, BackendReport } from './backend';
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'OPTIONS' | 'HEAD';
 
@@ -116,4 +116,7 @@ export interface AssessmentReport {
   };
   findings: SecurityFindingReportItem[];
   markdownContent: string;
+  backendReportId?: string;
+  sessionId?: string;
+  backendReport?: BackendReport;
 }
