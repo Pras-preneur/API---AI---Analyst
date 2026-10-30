@@ -10,7 +10,7 @@ ENV_FILE = BASE_DIR / ".env"
 
 load_dotenv(dotenv_path=ENV_FILE)
 
-NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY", "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").strip()
+NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY", "").strip()
 
 NVIDIA_BASE_URL = os.getenv(
     "NVIDIA_BASE_URL",
