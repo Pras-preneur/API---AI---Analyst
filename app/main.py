@@ -292,7 +292,8 @@ async def review_finding(
 
         # Guard 2: Require sufficient and non-inconclusive evidence
         resp = finding.evidence.response if finding.evidence else None
-        if not resp or not isinstance(resp, dict) or not resp.get("status_code"):
+        has_valid_resp = bool(resp and isinstance(resp, dict) and (resp.get("status_code") or len(resp) > 0))
+        if not resp or not isinstance(resp, dict) or not has_valid_resp:
             raise HTTPException(
                 status_code=400,
                 detail="Cannot confirm finding without valid HTTP response evidence.",
