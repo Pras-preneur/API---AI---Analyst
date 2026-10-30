@@ -57,3 +57,4 @@ def test_cors_exposes_x_session_id():
     assert response.headers.get("access-control-allow-origin") == "http://localhost:5173"
     expose_headers = response.headers.get("access-control-expose-headers", "")
     assert "X-Session-ID" in expose_headers
+
