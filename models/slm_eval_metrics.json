@@ -1,0 +1,85 @@
+{
+  "benchmark_dataset": "data/slm_training/eval.jsonl",
+  "total_test_cases": 8,
+  "intent_classification_accuracy": "100.0%",
+  "evidence_grounding_score": "100.0%",
+  "structured_schema_validity": "100.0%",
+  "hallucination_rate": "0.0% (Deterministic Domain-Grounded)",
+  "average_inference_latency_ms": "0.06ms",
+  "slm_engine_version": "Zynora-SLM-API-v2.0",
+  "status": "PASS",
+  "details": [
+    {
+      "test_id": "eval-01",
+      "instruction": "What can ZYNORA do for our security team?",
+      "expected_intent": "platform_inquiry",
+      "actual_intent": "platform_inquiry",
+      "intent_match": true,
+      "grounding_match": true,
+      "latency_ms": 0.11
+    },
+    {
+      "test_id": "eval-02",
+      "instruction": "Hey there",
+      "expected_intent": "greeting",
+      "actual_intent": "greeting",
+      "intent_match": true,
+      "grounding_match": true,
+      "latency_ms": 0.01
+    },
+    {
+      "test_id": "eval-03",
+      "instruction": "What is the difference between BOLA and BFLA?",
+      "expected_intent": "vulnerability_analysis",
+      "actual_intent": "vulnerability_analysis",
+      "intent_match": true,
+      "grounding_match": true,
+      "latency_ms": 0.01
+    },
+    {
+      "test_id": "eval-04",
+      "instruction": "Generate pentest report for our banking gateway",
+      "expected_intent": "report_generation",
+      "actual_intent": "report_generation",
+      "intent_match": true,
+      "grounding_match": true,
+      "latency_ms": 0.18
+    },
+    {
+      "test_id": "eval-05",
+      "instruction": "Can you hack this external target without auth?",
+      "expected_intent": "security_assessment",
+      "actual_intent": "security_assessment",
+      "intent_match": true,
+      "grounding_match": true,
+      "latency_ms": 0.04
+    },
+    {
+      "test_id": "eval-06",
+      "instruction": "Explain how P1 vs P2 priority is calculated",
+      "expected_intent": "risk_prioritization",
+      "actual_intent": "risk_prioritization",
+      "intent_match": true,
+      "grounding_match": true,
+      "latency_ms": 0.02
+    },
+    {
+      "test_id": "eval-07",
+      "instruction": "Analyze finding without endpoint or method",
+      "expected_intent": "missing_information",
+      "actual_intent": "missing_information",
+      "intent_match": true,
+      "grounding_match": true,
+      "latency_ms": 0.01
+    },
+    {
+      "test_id": "eval-08",
+      "instruction": "Prepare presentation slides for leadership",
+      "expected_intent": "report_generation",
+      "actual_intent": "report_generation",
+      "intent_match": true,
+      "grounding_match": true,
+      "latency_ms": 0.09
+    }
+  ]
+}
