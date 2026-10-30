@@ -430,3 +430,92 @@ async def get_report_json(
         },
     )
 
+
+# ---------------------------------------------------------------------------
+# AI / ML and SLM Reasoning Endpoints (Phase 5)
+# ---------------------------------------------------------------------------
+
+from app.ai.schemas import (
+    SecurityFindingInput,
+    FindingAnalysisOutput,
+    ChatMessageRequest,
+    SLMStructuredResponse,
+    ReportGenerationRequest,
+)
+from app.ai.service import (
+    analyze_security_finding_service,
+    process_chat_service,
+    generate_document_service,
+    finding_to_security_input,
+)
+
+
+@app.post("/api/v1/analyze")
+async def analyze_finding_endpoint(input_data: SecurityFindingInput):
+    """Analyze a security finding using the trained Random Forest classifier and SLM reasoning.
+
+    Advisory only:
+    - Never changes the scanner verdict (scanner_verdict_changed=False).
+    - Returns recommended priority (P1/P2/P3), class probabilities, defensive remediation,
+      and safe curl validation assertions.
+    """
+    try:
+        result = analyze_security_finding_service(input_data)
+        return result.model_dump()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Analysis failed: {str(exc)}")
+
+
+@app.post("/api/v1/chat")
+async def chat_endpoint(request: ChatMessageRequest):
+    """Conversational security intelligence powered by ZYNORA SLM Engine.
+
+    Accepts operator prompts and optional token-minimized context.
+    Returns structured intent classification, safe probe suggestions, and interactive UI actions.
+    """
+    try:
+        response = process_chat_service(request)
+        return response.model_dump()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Chat processing failed: {str(exc)}")
+
+
+@app.post("/api/v1/reports/generate")
+async def generate_report_endpoint(request: ReportGenerationRequest):
+    """Generate multi-format publication-grade security documents (Pentest, Bug Bounty, PPT, etc.)."""
+    try:
+        doc = generate_document_service(
+            report_type=request.report_type,
+            spec_title=request.spec_title,
+            endpoints_count=request.endpoints_count,
+            findings=request.findings,
+            context=request.context,
+        )
+        return {"report": doc}
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Report generation failed: {str(exc)}")
+
+
+@app.post("/findings/{finding_id}/analyze")
+async def analyze_session_finding(
+    finding_id: str,
+    x_session_id: str = Header(..., alias="X-Session-ID"),
+):
+    """Analyze an active session finding using the ML priority model and SLM reasoning.
+
+    Bridges real scanner findings with AI-assisted triage without altering verification status.
+    """
+    try:
+        session = session_store.get_session(x_session_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Session not found")
+    try:
+        finding = session.get_finding(finding_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Finding not found")
+
+    finding_input = finding_to_security_input(finding)
+    result = analyze_security_finding_service(finding_input)
+    return result.model_dump()
+
+
