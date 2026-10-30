@@ -494,12 +494,15 @@ ${f.recommended_remediation}
 - **Retesting Guidance**: ${backendReport.retesting_guidance || 'To verify fixes, patch target services and re-execute approved test proposals.'}
 `;
   } else {
-    // Legacy fallback
-    markdownContent = `# API Security Assessment Report
+    // Unverified local preview fallback draft
+    markdownContent = `# [DRAFT] API Security Assessment Preview (Unverified Client Session)
+
+> **NOTICE: UNVERIFIED LOCAL PREVIEW (BACKEND REPORT UNAVAILABLE)**  
+> This preview was synthesized from local browser session memory because an authoritative backend report could not be retrieved. Findings and metrics below have not been validated by the backend assessment engine.
 
 **Target Specification**: ${spec.title} (v${spec.version})  
 **Generated At**: ${new Date().toLocaleString()}  
-**Assessor**: API Security Testing Assistant (Zynora-SLM Engine)  
+**Assessor**: Local Client Cache (Unverified Preview)  
 
 ---
 

@@ -55,17 +55,25 @@ export const AssessmentReportModal: React.FC<AssessmentReportModalProps> = ({
         a.click();
         URL.revokeObjectURL(url);
         return;
-      } catch (err) {
-        console.warn('Backend JSON export failed, falling back to client JSON:', err);
+      } catch (err: any) {
+        console.error('Backend JSON export failed:', err);
+        alert(`Backend JSON export failed: ${err.details || err.message || 'Server error'}. Please verify backend connection.`);
+        return;
       } finally {
         setDownloadingJson(false);
       }
     }
-    const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+    // Fallback: clearly marked as unverified local preview
+    const fallbackData = {
+      _report_status: 'UNVERIFIED_LOCAL_PREVIEW',
+      _warning: 'Authoritative backend report was not available; generated from client session cache only.',
+      ...report,
+    };
+    const blob = new Blob([JSON.stringify(fallbackData, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `API-Security-Assessment-${report.specTitle.replace(/\s+/g, '-')}.json`;
+    a.download = `PREVIEW-API-Security-Assessment-${report.specTitle.replace(/\s+/g, '-')}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -82,8 +90,10 @@ export const AssessmentReportModal: React.FC<AssessmentReportModalProps> = ({
         a.click();
         URL.revokeObjectURL(url);
         return;
-      } catch (err) {
-        console.warn('Backend PDF export failed, falling back to window.print():', err);
+      } catch (err: any) {
+        console.error('Backend PDF export failed:', err);
+        alert(`Backend PDF export failed: ${err.details || err.message || 'Server error'}. Please verify backend connection.`);
+        return;
       } finally {
         setDownloadingPdf(false);
       }
