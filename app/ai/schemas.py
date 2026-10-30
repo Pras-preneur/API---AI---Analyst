@@ -150,3 +150,4 @@ class SLMStructuredResponse(BaseModel):
     finding_analysis: Optional[FindingAnalysisOutput] = None
     requires_confirmation: bool = False
     slm_engine: str = "Zynora-SLM-API-v2.0"
+

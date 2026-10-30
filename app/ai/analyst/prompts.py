@@ -93,3 +93,4 @@ def build_analysis_prompt(finding: dict, ml_result: dict) -> str:
         "facts that are not present.\n\n"
         f"{json.dumps(payload, indent=2, default=str)}"
     )
+

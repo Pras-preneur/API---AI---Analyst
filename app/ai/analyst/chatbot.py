@@ -82,3 +82,4 @@ def analyze_finding(finding: dict) -> dict:
         # Nested llm_analysis dictionary for backward-compatibility with UI components
         "llm_analysis": llm_analysis,
     }
+

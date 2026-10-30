@@ -35,3 +35,4 @@ FEATURE_OPTIONS = {
     "auth_required": ["true", "false", "unknown"],
     "exploitability": ["low", "medium", "high", "unknown"],
 }
+

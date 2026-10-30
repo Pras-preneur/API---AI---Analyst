@@ -595,3 +595,4 @@ echo "Validation complete."
 
 
 report_generator = SecurityReportGenerator()
+

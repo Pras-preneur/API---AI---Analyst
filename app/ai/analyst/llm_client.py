@@ -82,3 +82,4 @@ def generate_llm_response(
         raise LLMClientError(
             "NVIDIA API returned an invalid response structure."
         ) from None
+
