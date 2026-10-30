@@ -152,3 +152,4 @@ export function mapBackendProposedTestToUI(test: BackendProposedTest): ProposedT
     rejectedAt: test.rejected_at,
   };
 }
+

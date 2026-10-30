@@ -1,3 +1,10 @@
+import { ExecutionConfigModal } from './components/chat/ExecutionConfigModal';
+import { FindingsModal } from './components/chat/FindingsModal';
+import type {
+  BackendExecutionConfig,
+  BackendFindingReviewRequest,
+  BackendFinding,
+} from './types/backend';
 import React, { useState, useEffect } from 'react';
 import { ClaudeSidebar } from './components/layout/ClaudeSidebar';
 import { ChatMainView } from './components/chat/ChatMainView';
@@ -24,7 +31,7 @@ import {
   fetchBackendProposals,
   generateAssessmentReport,
 } from './services/chatService';
-import { checkBackendHealth, approveProposal, rejectProposal } from './services/api';
+import { checkBackendHealth, approveProposal, rejectProposal, executeTests, reviewFinding } from './services/api';
 import { Layers, ShieldAlert, FileDown, Plus, FileCode, CheckCircle2 } from 'lucide-react';
 
 const INITIAL_GREETING: ChatMessage = {
@@ -103,6 +110,11 @@ export function App() {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [currentReport, setCurrentReport] = useState<AssessmentReport | null>(null);
+  const [executionModalOpen, setExecutionModalOpen] = useState(false);
+  const [findingsModalOpen, setFindingsModalOpen] = useState(false);
+  const [sessionFindings, setSessionFindings] = useState<BackendFinding[]>([]);
+  const [isExecuting, setIsExecuting] = useState(false);
+  const [isReviewingFinding, setIsReviewingFinding] = useState(false);
 
   // Save sessions to localStorage
   useEffect(() => {
@@ -415,6 +427,114 @@ export function App() {
     }
   };
 
+  // Phase 3B: Controlled Execution of Approved Proposals
+  const handleExecuteApprovedTests = async (
+    selectedProposalIds: string[],
+    config: BackendExecutionConfig
+  ) => {
+    if (!backendSessionId) {
+      alert('No active backend assessment session. Please upload a specification first.');
+      return;
+    }
+    setIsExecuting(true);
+    try {
+      const returnedFindings = await executeTests(backendSessionId, {
+        proposal_ids: selectedProposalIds,
+        target: config.target_base_url,
+        config,
+      });
+
+      // Update session findings
+      setSessionFindings((prev) => {
+        const existingIds = new Set(prev.map((f) => f.finding_id));
+        const filtered = prev.filter((f) => !returnedFindings.some((rf) => rf.finding_id === f.finding_id));
+        return [...filtered, ...returnedFindings];
+      });
+
+      // Mark executed proposals in messages as completed
+      const updatedMessages = messages.map((msg) => {
+        if (!msg.proposedTests) return msg;
+        return {
+          ...msg,
+          proposedTests: msg.proposedTests.map((t) =>
+            selectedProposalIds.includes(t.testId)
+              ? {
+                  ...t,
+                  status: 'completed' as const,
+                  executionEvidence: {
+                    httpStatus: 200,
+                    responseSnippet: 'Probed by SPEC_DRIVEN engine',
+                    findingConfirmed: false,
+                    timestamp: new Date().toISOString(),
+                  },
+                }
+              : t
+          ),
+        };
+      });
+
+      // Append assistant execution completion message
+      const execMsg: ChatMessage = {
+        id: `m-exec-${Date.now()}`,
+        sender: 'assistant',
+        text:
+          `### 🎯 Controlled Security Execution Completed\n\n` +
+          `Target: \`${config.target_base_url}\` • Mode: \`${config.mode}\`\n\n` +
+          `Successfully executed **${selectedProposalIds.length}** approved security probe(s). ` +
+          `The backend differential engine returned **${returnedFindings.length}** finding(s) with sanitized evidence.\n\n` +
+          `> [!NOTE]\n` +
+          `> **Vulnerability Confirmation Invariant:** Probing outcomes such as \`SUSPECTED\` or HTTP status \`200 OK\` do **not** confirm a vulnerability. ` +
+          `Inspect the sanitized evidence below and submit an explicit human auditor review decision.`,
+        timestamp: 'Just now',
+        backendFindings: returnedFindings,
+      };
+
+      updateCurrentSessionMessages([...updatedMessages, execMsg]);
+    } catch (err: any) {
+      alert(`Backend execution error: ${err?.details || err?.message}`);
+      throw err;
+    } finally {
+      setIsExecuting(false);
+    }
+  };
+
+  // Phase 3B: Explicit Human Review of Findings
+  const handleReviewFinding = async (
+    findingId: string,
+    review: BackendFindingReviewRequest
+  ) => {
+    if (!backendSessionId) {
+      alert('No active backend assessment session. Please upload a specification first.');
+      return;
+    }
+    setIsReviewingFinding(true);
+    try {
+      const updatedFinding = await reviewFinding(backendSessionId, findingId, review);
+
+      // Update session findings list
+      setSessionFindings((prev) =>
+        prev.map((f) => (f.finding_id === findingId ? updatedFinding : f))
+      );
+
+      // Update finding inside chat messages
+      const updatedMessages = messages.map((msg) => {
+        if (!msg.backendFindings) return msg;
+        return {
+          ...msg,
+          backendFindings: msg.backendFindings.map((f) =>
+            f.finding_id === findingId ? updatedFinding : f
+          ),
+        };
+      });
+      updateCurrentSessionMessages(updatedMessages);
+    } catch (err: any) {
+      alert(`Human review rejected by backend: ${err?.details || err?.message}`);
+      throw err;
+    } finally {
+      setIsReviewingFinding(false);
+    }
+  };
+
   // Reject test (Phase 2: Transition to REJECTED via backend)
   const handleRejectTest = async (testId: string) => {
     if (!backendSessionId) {
@@ -506,6 +626,13 @@ export function App() {
               onApproveTest={handleApproveTest}
               onRejectTest={handleRejectTest}
               onSelectReportOption={(optId) => handleSendMessage(`Generate ${optId}`)}
+              onReviewFinding={handleReviewFinding}
+              onOpenExecutionModal={() => setExecutionModalOpen(true)}
+              onOpenFindings={() => setFindingsModalOpen(true)}
+              findingsCount={sessionFindings.length}
+              approvedProposalsCount={
+                messages.flatMap((m) => m.proposedTests || []).filter((t) => t.status === 'approved').length
+              }
               onOpenInventory={() => setInventoryOpen(true)}
               onOpenUpload={() => setUploadOpen(true)}
               onOpenReport={handleOpenReport}
@@ -683,6 +810,22 @@ export function App() {
         isOpen={reportOpen}
         onClose={() => setReportOpen(false)}
         report={currentReport}
+      />
+
+      <ExecutionConfigModal
+        isOpen={executionModalOpen}
+        onClose={() => setExecutionModalOpen(false)}
+        proposals={messages.flatMap((m) => m.proposedTests || [])}
+        onExecute={handleExecuteApprovedTests}
+        isExecuting={isExecuting}
+      />
+
+      <FindingsModal
+        isOpen={findingsModalOpen}
+        onClose={() => setFindingsModalOpen(false)}
+        findings={sessionFindings}
+        onReviewFinding={handleReviewFinding}
+        isReviewing={isReviewingFinding}
       />
 
     </div>

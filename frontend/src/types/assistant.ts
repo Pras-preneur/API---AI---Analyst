@@ -1,3 +1,5 @@
+import type { BackendFinding } from './backend';
+
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'OPTIONS' | 'HEAD';
 
 export interface ApiEndpointParameter {
@@ -90,6 +92,7 @@ export interface ChatMessage {
   };
   proposedTests?: ProposedTest[];
   findings?: SecurityFindingReportItem[];
+  backendFindings?: BackendFinding[];
   reportOptions?: ReportOptionItem[];
   codeBlock?: {
     language: string;

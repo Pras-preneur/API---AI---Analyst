@@ -1,3 +1,5 @@
+import type { BackendFinding, BackendFindingReviewRequest } from '../../types/backend';
+import { FindingEvidenceCard } from './FindingEvidenceCard';
 import React, { useState } from 'react';
 import {
   Shield,
@@ -17,6 +19,8 @@ interface ChatMessageItemProps {
   onApproveTest: (testId: string) => void;
   onRejectTest: (testId: string) => void;
   onSelectReportOption?: (optionId: string) => void;
+  onReviewFinding?: (findingId: string, review: BackendFindingReviewRequest) => Promise<void>;
+  onOpenExecutionModal?: () => void;
   pendingTestIds?: Record<string, boolean>;
 }
 
@@ -25,6 +29,8 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
   onApproveTest,
   onRejectTest,
   onSelectReportOption,
+  onReviewFinding,
+  onOpenExecutionModal,
   pendingTestIds,
 }) => {
   const isAssistant = message.sender === 'assistant';
@@ -270,6 +276,47 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
                       </div>
                     );
                   })}
+                </div>
+
+                {message.proposedTests.some((t) => t.status === 'approved') && onOpenExecutionModal && (
+                  <div className="mt-3 p-2.5 rounded-xl bg-pink-950/30 border border-pink-700/50 flex items-center justify-between flex-wrap gap-2">
+                    <div className="text-[11px] font-mono text-pink-300">
+                      <strong>{message.proposedTests.filter((t) => t.status === 'approved').length}</strong> approved probe(s) ready for execution.
+                    </div>
+                    <button
+                      type="button"
+                      onClick={onOpenExecutionModal}
+                      className="px-3 py-1 rounded-full bg-gradient-to-r from-pink-500 to-rose-500 hover:opacity-95 text-white text-[11px] font-semibold flex items-center gap-1.5 shadow-xs transition-all active:scale-95"
+                    >
+                      <Play className="w-2.5 h-2.5 fill-current" />
+                      <span>Configure & Execute</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Live Backend Probing Findings */}
+            {message.backendFindings && message.backendFindings.length > 0 && (
+              <div className="mt-3 space-y-3 pt-2.5 border-t border-slate-700/50">
+                <div className="flex items-center justify-between">
+                  <div className="text-[11px] font-semibold text-pink-400 flex items-center gap-1.5 font-mono">
+                    <ShieldAlert className="w-3.5 h-3.5 text-pink-500" />
+                    <span>Backend Probing Findings ({message.backendFindings.length})</span>
+                  </div>
+                  <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-800">
+                    Sanitized Evidence
+                  </span>
+                </div>
+
+                <div className="space-y-3">
+                  {message.backendFindings.map((finding) => (
+                    <FindingEvidenceCard
+                      key={finding.finding_id}
+                      finding={finding}
+                      onReview={onReviewFinding}
+                    />
+                  ))}
                 </div>
               </div>
             )}

@@ -1,3 +1,4 @@
+import type { BackendFindingReviewRequest } from '../../types/backend';
 import React, { useRef, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { IridescentOrb, OrbState } from './IridescentOrb';
@@ -6,6 +7,8 @@ import { MessageComposer } from './MessageComposer';
 import type { ApiSpec, ChatMessage } from '../../types/assistant';
 import {
   FileCode,
+  ShieldAlert,
+  Play,
   Plus,
   Layers,
   Menu,
@@ -20,6 +23,11 @@ interface ChatMainViewProps {
   onApproveTest: (testId: string) => void;
   onRejectTest: (testId: string) => void;
   onSelectReportOption?: (optionId: string) => void;
+  onReviewFinding?: (findingId: string, review: BackendFindingReviewRequest) => Promise<void>;
+  onOpenExecutionModal?: () => void;
+  onOpenFindings?: () => void;
+  findingsCount?: number;
+  approvedProposalsCount?: number;
   pendingTestIds?: Record<string, boolean>;
   onOpenInventory: () => void;
   onOpenUpload: () => void;
@@ -37,6 +45,12 @@ export const ChatMainView: React.FC<ChatMainViewProps> = ({
   onApproveTest,
   onRejectTest,
   onSelectReportOption,
+  onReviewFinding,
+  onOpenExecutionModal,
+  onOpenFindings,
+  findingsCount = 0,
+  approvedProposalsCount = 0,
+  pendingTestIds,
   onOpenInventory,
   onOpenUpload,
   onOpenReport,
@@ -104,6 +118,28 @@ export const ChatMainView: React.FC<ChatMainViewProps> = ({
             <Layers className="w-3.5 h-3.5" />
             <span>Inventory</span>
           </button>
+
+          {findingsCount > 0 && onOpenFindings && (
+            <button
+              onClick={onOpenFindings}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-mono text-pink-400 bg-pink-950/40 hover:bg-pink-900/50 border border-pink-700/50 transition-colors shadow-xs"
+              title="Inspect findings and sanitized evidence"
+            >
+              <ShieldAlert className="w-3.5 h-3.5 text-pink-400" />
+              <span>Findings ({findingsCount})</span>
+            </button>
+          )}
+
+          {approvedProposalsCount > 0 && onOpenExecutionModal && (
+            <button
+              onClick={onOpenExecutionModal}
+              className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold text-white bg-gradient-to-r from-pink-500 to-rose-500 hover:opacity-95 shadow-md shadow-pink-500/20 transition-all active:scale-95"
+              title="Configure and execute approved security probes"
+            >
+              <Play className="w-3 h-3 fill-current" />
+              <span>Execute ({approvedProposalsCount})</span>
+            </button>
+          )}
         </div>
 
         {/* Right: Backend Status & Actions */}
@@ -216,6 +252,9 @@ export const ChatMainView: React.FC<ChatMainViewProps> = ({
                       onApproveTest={onApproveTest}
                       onRejectTest={onRejectTest}
                       onSelectReportOption={onSelectReportOption}
+                      onReviewFinding={onReviewFinding}
+                      onOpenExecutionModal={onOpenExecutionModal}
+                      pendingTestIds={pendingTestIds}
                     />
                   ))}
 

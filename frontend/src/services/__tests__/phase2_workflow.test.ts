@@ -126,7 +126,7 @@ describe('Phase 2 Workflow Integration Tests', () => {
         method: 'get',
         summary: 'Retrieve document',
         parameters: [
-          { name: 'doc_id', location: 'path', required: true, schema: { type: 'string' } },
+          { name: 'doc_id', in: 'path', required: true, schema: { type: 'string' } },
         ],
         effective_security: [],
       },
@@ -345,3 +345,4 @@ describe('Phase 2 Workflow Integration Tests', () => {
     expect(req3).toBeNull();
   });
 });
+

@@ -129,10 +129,62 @@ export interface BackendReport {
   pending_review_count: number;
 }
 
+export interface BackendTestIdentity {
+  identity_id: string;
+  username?: string;
+  password?: string;
+  token?: string;
+  api_key?: string;
+  headers?: Record<string, string>;
+  cookies?: Record<string, string>;
+  roles?: string[];
+  credentials_verified: boolean;
+  description?: string;
+}
+
+export interface BackendParameterFixtures {
+  owner_path_params?: Record<string, any>;
+  attacker_path_params?: Record<string, any>;
+  query_params?: Record<string, any>;
+  headers?: Record<string, string>;
+}
+
+export interface BackendRequestBudget {
+  max_requests: number;
+  current_count?: number;
+}
+
+export interface BackendBFLAPolicyMapping {
+  endpoint_path: string;
+  endpoint_method?: string;
+  required_role: string;
+  permitted_roles?: string[];
+  forbidden_roles?: string[];
+  allow_static_route_concealment?: boolean;
+  notes?: string;
+}
+
+export interface BackendExecutionConfig {
+  mode: 'SPEC_DRIVEN' | 'LEGACY_FIXTURE';
+  target_base_url: string;
+  owner_identity?: BackendTestIdentity | null;
+  attacker_identity?: BackendTestIdentity | null;
+  privileged_identity?: BackendTestIdentity | null;
+  lower_privileged_identity?: BackendTestIdentity | null;
+  authenticated_identity?: BackendTestIdentity | null;
+  auth_mutation?: 'NONE' | 'MISSING_CREDENTIALS';
+  bfla_policy?: BackendBFLAPolicyMapping | null;
+  parameters?: BackendParameterFixtures;
+  budget?: BackendRequestBudget;
+  timeout_seconds?: number;
+  follow_redirects: boolean; // strictly false
+  require_approval: boolean; // strictly true
+}
+
 export interface BackendExecuteRequest {
   proposal_ids: string[];
   target: string;
-  config?: Record<string, any>;
+  config?: BackendExecutionConfig | Record<string, any>;
 }
 
 export interface BackendReportRequest {
