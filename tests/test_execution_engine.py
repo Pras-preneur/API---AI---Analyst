@@ -117,7 +117,7 @@ def reset_store():
     session_store._sessions.clear()
 
 def make_endpoint(path: str = "/vuln/users/{username}") -> EndpointModel:
-    return EndpointModel.parse_obj({
+    return EndpointModel.model_validate({
         "path": path,
         "method": "get",
         "responses": {"200": {"description": "OK"}},

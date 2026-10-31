@@ -1,9 +1,10 @@
+import threading
 import uuid
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, List, Dict, Optional
 
-from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
+from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator, PrivateAttr
 
 # Reuse existing parser models for endpoint representation
 from .parser.openapi_parser import EndpointModel
@@ -78,16 +79,21 @@ def validate_assessment_outcome(
     is_human_review: bool = False,
     reviewer_notes: Optional[str] = None,
 ) -> None:
-    """Enforce that CONFIRMED outcome requires explicit human review.
+    """Enforce that CONFIRMED outcome requires explicit human review and justification.
 
     Automated differential comparisons or HTTP status codes alone must NEVER
     assign CONFIRMED without human reviewer sign-off.
     """
-    if outcome == AssessmentOutcome.CONFIRMED and not is_human_review:
-        raise ValueError(
-            "Assessment outcome 'CONFIRMED' requires explicit human review and "
-            "cannot be assigned automatically by automated differential comparisons or status codes."
-        )
+    if outcome == AssessmentOutcome.CONFIRMED:
+        if not is_human_review:
+            raise ValueError(
+                "Assessment outcome 'CONFIRMED' requires explicit human review and "
+                "cannot be assigned automatically by automated differential comparisons or status codes."
+            )
+        if reviewer_notes is not None and len(reviewer_notes.strip()) < 5:
+            raise ValueError(
+                "Reviewer notes must contain at least 5 characters to confirm a finding."
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -459,6 +465,7 @@ class Report(BaseModel):
 
 # Session model – holds proposals, findings, and reports per user workflow
 class Session(BaseModel):
+    _lock: threading.RLock = PrivateAttr(default_factory=threading.RLock)
     session_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     # Stored endpoint inventory for this assessment session
@@ -477,40 +484,43 @@ class Session(BaseModel):
         return self.endpoints
 
     def add_proposal(self, proposal: ProposedTest) -> str:
-        self.proposals[proposal.test_id] = proposal
+        with self._lock:
+            self.proposals[proposal.test_id] = proposal
         return proposal.test_id
 
     def get_proposal(self, test_id: str) -> ProposedTest:
         return self.proposals[test_id]
 
     def set_proposal_status(self, test_id: str, status: TestStatus) -> None:
-        self.proposals[test_id].status = status
+        with self._lock:
+            self.proposals[test_id].status = status
 
     def add_finding(self, finding: Finding) -> str:
-        # Prevent duplicate findings when the same proposal is processed again:
-        # update existing finding for the same test_id in place while preserving its finding_id.
-        for existing_id, existing_finding in self.findings.items():
-            if existing_finding.test_id == finding.test_id:
-                finding.finding_id = existing_finding.finding_id
-                finding.timestamp = existing_finding.timestamp
-                # Preserve prior review history
-                finding.review_history = list(existing_finding.review_history)
-                if existing_finding.is_human_reviewed:
-                    # A prior human review existed. The new execution provides fresh evidence,
-                    # so do not preserve a prior CONFIRMED or FALSE_POSITIVE decision as automatically
-                    # valid for the new execution run. Mark finding as requiring re-review while
-                    # maintaining the historical audit trail in review_history.
-                    finding.requires_re_review = True
-                    finding.is_human_reviewed = False
-                    finding.reviewer_id = None
-                    finding.reviewed_at = None
-                    finding.reviewer_notes = None
+        with self._lock:
+            # Prevent duplicate findings when the same proposal is processed again:
+            # update existing finding for the same test_id in place while preserving its finding_id.
+            for existing_id, existing_finding in self.findings.items():
+                if existing_finding.test_id == finding.test_id:
+                    finding.finding_id = existing_finding.finding_id
+                    finding.timestamp = existing_finding.timestamp
+                    # Preserve prior review history
+                    finding.review_history = list(existing_finding.review_history)
+                    if existing_finding.is_human_reviewed:
+                        # A prior human review existed. The new execution provides fresh evidence,
+                        # so do not preserve a prior CONFIRMED or FALSE_POSITIVE decision as automatically
+                        # valid for the new execution run. Mark finding as requiring re-review while
+                        # maintaining the historical audit trail in review_history.
+                        finding.requires_re_review = True
+                        finding.is_human_reviewed = False
+                        finding.reviewer_id = None
+                        finding.reviewed_at = None
+                        finding.reviewer_notes = None
 
-                self.findings[existing_id] = finding
-                return existing_id
+                    self.findings[existing_id] = finding
+                    return existing_id
 
-        self.findings[finding.finding_id] = finding
-        return finding.finding_id
+            self.findings[finding.finding_id] = finding
+            return finding.finding_id
 
     def get_finding(self, finding_id: str) -> Finding:
         return self.findings[finding_id]
@@ -522,7 +532,8 @@ class Session(BaseModel):
         return None
 
     def add_report(self, report: "Report") -> str:
-        self.reports[report.report_id] = report
+        with self._lock:
+            self.reports[report.report_id] = report
         return report.report_id
 
     def get_report(self, report_id: str) -> "Report":
@@ -533,10 +544,12 @@ class Session(BaseModel):
 class SessionStore:
     def __init__(self):
         self._sessions: Dict[str, Session] = {}
+        self._lock = threading.RLock()
 
     def create_session(self) -> str:
-        session = Session()
-        self._sessions[session.session_id] = session
+        with self._lock:
+            session = Session()
+            self._sessions[session.session_id] = session
         return session.session_id
 
     def get_session(self, session_id: str) -> Session:

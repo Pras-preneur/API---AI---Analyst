@@ -92,9 +92,31 @@ async def update_profile(payload: Dict[str, Any], current_user: Dict[str, Any] =
     """Mass‑assignment‑vulnerable update: any keys in the payload are merged
     directly into the user's profile without validation.
     """
-    # Vulnerable behaviour – blindly update
     current_user["profile"].update(payload)
-    return {"msg": "profile updated", "profile": current_user["profile"]}
+    if "role" in payload:
+        current_user["role"] = payload["role"]
+    if "is_admin" in payload:
+        current_user["is_admin"] = bool(payload["is_admin"])
+    return {"msg": "profile updated", "profile": current_user["profile"], "role": current_user.get("role")}
+
+
+@mock_app.patch("/secure/profile")
+async def secure_update_profile(
+    payload: Dict[str, Any],
+    current_user: Dict[str, Any] = Depends(get_current_user)
+) -> Dict[str, Any]:
+    """Strictly allowlisted profile update. Rejects restricted fields (role, is_admin, etc.)."""
+    restricted_fields = {"role", "is_admin", "admin", "user_id", "username", "email", "permissions"}
+    injected_restricted = restricted_fields.intersection(payload.keys())
+    if injected_restricted:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Restricted fields cannot be modified: {sorted(list(injected_restricted))}"
+        )
+    for field in ["bio", "age"]:
+        if field in payload:
+            current_user["profile"][field] = payload[field]
+    return {"msg": "profile updated securely", "profile": current_user["profile"], "role": current_user.get("role")}
 
 # ---------------------------------------------------------------------------
 # Object‑level endpoint (potential BOLA)

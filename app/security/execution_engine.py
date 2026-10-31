@@ -167,17 +167,18 @@ async def _execute_missing_auth(base_url: str, proposal: ProposedTest) -> Findin
 
 
 async def _execute_mass_assignment(base_url: str, proposal: ProposedTest) -> Finding:
-    """Mass‑assignment – PATCH the profile with an innocuous field."""
-    target = f"{base_url}/profile"
+    """Mass-assignment probe: attempt to inject restricted administrative attributes."""
+    endpoint_path = proposal.endpoint.path if proposal.endpoint and proposal.endpoint.path else "/profile"
+    target = f"{base_url.rstrip('/')}{endpoint_path}"
     auth = httpx.BasicAuth("user_a", "passwordA")
-    payload = {"bio": "injected"}
+    payload = {"bio": "injected", "role": "admin", "is_admin": True}
     async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT, follow_redirects=False) as client:
         resp = await client.patch(target, json=payload, auth=auth)
     evidence = Evidence(
         request=_sanitize_request("PATCH", target, dict(resp.request.headers)),
         response=_sanitize_response(resp),
     )
-    is_vuln = resp.status_code == 200
+    is_vuln = resp.status_code in [200, 204]
     confidence = 1.0 if is_vuln else 0.0
     finding = Finding(
         test_id=proposal.test_id,
@@ -186,8 +187,8 @@ async def _execute_mass_assignment(base_url: str, proposal: ProposedTest) -> Fin
         severity=proposal.severity,
         status=FindingStatus.SUSPECTED if is_vuln else FindingStatus.NOT_EXECUTED,
         execution_status=ExecutionStatus.COMPLETED,
-        assessment_outcome=AssessmentOutcome.SUSPECTED if is_vuln else AssessmentOutcome.INCONCLUSIVE,
-        assessment_reason="Object profile was updated with client-supplied fields without input allowlisting" if is_vuln else "Profile update returned non-200 status",
+        assessment_outcome=AssessmentOutcome.SUSPECTED if is_vuln else AssessmentOutcome.ACCESS_DENIED,
+        assessment_reason="Object profile was updated with client-supplied fields without input allowlisting" if is_vuln else f"Profile update safely rejected restricted fields (HTTP {resp.status_code})",
         remediation="Bind only explicitly allowed fields from incoming payloads using strict allowlists.",
         notes=json.dumps({"confidence": confidence}),
     )
@@ -310,6 +311,8 @@ async def execute_proposals(
                 finding = await run_differential_bfla(proposal, config)
             elif proposal.test_type in {AuthTestType.AUTH_MISSING_CREDENTIALS.value, "AUTH_MISSING_CREDENTIALS"}:
                 finding = await run_authentication_test(proposal, config)
+            elif proposal.test_type == "MassAssignment":
+                finding = await _execute_mass_assignment(config.target_base_url, proposal)
             else:
                 # Unsupported in SPEC_DRIVEN mode
                 finding = Finding(

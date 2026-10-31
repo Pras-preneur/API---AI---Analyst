@@ -31,7 +31,7 @@ def make_endpoint(**overrides):
     }
     base.update(overrides)
     # ``parse_obj`` is used in the existing code; pydantic V2 deprecation warnings are acceptable for tests.
-    return EndpointModel.parse_obj(base)
+    return EndpointModel.model_validate(base)
 
 def create_session_with_one_proposal():
     """Helper that creates a session, generates a single proposal and stores it.

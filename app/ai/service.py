@@ -4,7 +4,7 @@ import re
 import json
 from typing import Dict, Any, Optional
 
-from app.models import Finding, AssessmentOutcome
+from app.models import Finding, AssessmentOutcome, session_store
 from app.security.sanitization import sanitize_string
 from app.ai.schemas import (
     SecurityFindingInput,
@@ -153,9 +153,77 @@ def analyze_security_finding_service(finding_input: SecurityFindingInput) -> Fin
     return FindingAnalysisOutput.model_validate(raw_res)
 
 
-def process_chat_service(request: ChatMessageRequest) -> SLMStructuredResponse:
-    """Process user prompt using ZYNORA SLM Engine with token-minimized context."""
-    res = slm_engine.process_chat(request.message, request.context)
+def process_chat_service(request: ChatMessageRequest, session_id: Optional[str] = None) -> SLMStructuredResponse:
+    """Process user prompt using ZYNORA SLM Engine with live session intelligence."""
+    ctx = dict(request.context or {})
+    sid = session_id or ctx.get("sessionId") or ctx.get("session_id")
+    live_session_data = None
+
+    if sid:
+        with session_store._lock:
+            if sid in session_store._sessions:
+                s = session_store._sessions[sid]
+                endpoints = s.get_endpoints()
+                proposals = list(s.proposals.values())
+                findings = list(s.findings.values())
+                reports = list(s.reports.values())
+
+                live_session_data = {
+                    "session_id": sid,
+                    "endpoints": [
+                        {
+                            "method": ep.method,
+                            "path": ep.path,
+                            "summary": ep.summary or "",
+                            "tags": ep.tags or [],
+                        }
+                        for ep in endpoints
+                    ],
+                    "proposals": [
+                        {
+                            "test_id": p.test_id,
+                            "method": p.endpoint.method,
+                            "path": p.endpoint.path,
+                            "test_type": p.test_type,
+                            "severity": p.severity,
+                            "status": p.status.value,
+                            "description": p.description,
+                            "executed_at": p.executed_at.isoformat() if p.executed_at else None,
+                        }
+                        for p in proposals
+                    ],
+                    "findings": [
+                        {
+                            "finding_id": f.finding_id,
+                            "test_id": f.test_id,
+                            "method": f.endpoint.method if f.endpoint else "",
+                            "path": f.endpoint.path if f.endpoint else "",
+                            "vulnerability_type": getattr(f, "vulnerability_type", getattr(f, "test_category", "Security Finding")),
+                            "severity": f.severity,
+                            "status": f.status.value,
+                            "assessment_outcome": f.assessment_outcome.value if f.assessment_outcome else f.status.value,
+                            "assessment_reason": f.assessment_reason or "",
+                            "evidence": f.evidence.model_dump() if f.evidence else {},
+                            "is_human_reviewed": f.is_human_reviewed,
+                            "reviewer_notes": f.reviewer_notes or "",
+                        }
+                        for f in findings
+                    ],
+                    "reports": [
+                        {
+                            "report_id": r.report_id,
+                            "title": r.title,
+                            "created_at": r.created_at.isoformat() if hasattr(r, "created_at") and r.created_at else None,
+                        }
+                        for r in reports
+                    ]
+                }
+
+    ctx["session_id"] = sid
+    if live_session_data is not None:
+        ctx["live_session"] = live_session_data
+
+    res = slm_engine.process_chat(request.message, ctx)
     return SLMStructuredResponse.model_validate(res)
 
 

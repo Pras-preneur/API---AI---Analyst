@@ -1,3 +1,4 @@
+from typing import Optional, List, Dict, Any
 """FastAPI entry point for API Security Assistant.
 
 Provides a health check and an endpoint to parse a local OpenAPI specification file.
@@ -45,6 +46,16 @@ app.add_middleware(
     allow_headers=["Content-Type", "X-Session-ID", "Accept", "Authorization"],
     expose_headers=["X-Session-ID", "Content-Disposition"],
 )
+
+
+@app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+    """Enforce baseline security headers on all responses."""
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return response
 
 
 @app.get("/health")
@@ -103,7 +114,7 @@ async def propose_tests(
     for proposal in proposals:
         session_store.add_proposal(x_session_id, proposal)
 
-    return [p.dict() for p in proposals]
+    return [p.model_dump() for p in proposals]
 
 @app.post("/tests/{test_id}/approve")
 async def approve_test(test_id: str, x_session_id: str = Header(..., alias="X-Session-ID")):
@@ -122,7 +133,7 @@ async def approve_test(test_id: str, x_session_id: str = Header(..., alias="X-Se
         raise HTTPException(status_code=400, detail="Only PROPOSED proposals can be approved")
     proposal.status = TestStatus.APPROVED
     proposal.approved_at = datetime.now(timezone.utc)
-    return proposal.dict()
+    return proposal.model_dump()
 
 @app.get("/tests/{test_id}")
 async def get_test(test_id: str, x_session_id: str = Header(..., alias="X-Session-ID")):
@@ -137,7 +148,7 @@ async def get_test(test_id: str, x_session_id: str = Header(..., alias="X-Sessio
         proposal: ProposedTest = session_store.get_proposal(x_session_id, test_id)
     except KeyError:
         raise HTTPException(status_code=404, detail="Proposal not found")
-    return proposal.dict()
+    return proposal.model_dump()
 @app.post("/tests/{test_id}/reject")
 async def reject_test(test_id: str, x_session_id: str = Header(..., alias="X-Session-ID")):
     """Reject a proposed test. Transition PROPOSED → REJECTED.
@@ -155,18 +166,30 @@ async def reject_test(test_id: str, x_session_id: str = Header(..., alias="X-Ses
         raise HTTPException(status_code=400, detail="Only PROPOSED proposals can be rejected")
     proposal.status = TestStatus.REJECTED
     proposal.rejected_at = datetime.now(timezone.utc)
-    return proposal.dict()
+    return proposal.model_dump()
 
 
 @app.post("/parse-openapi")
 async def parse_openapi_endpoint(file: UploadFile = File(...)):
-    # Validate size (UploadFile may not have size attribute; read into memory with limit)
-    contents = await file.read()
-    if len(contents) > MAX_SPEC_SIZE:
-        raise HTTPException(status_code=413, detail="Specification file too large (max 5 MB).")
     # Validate extension
     if not file.filename.lower().endswith((".json", ".yaml", ".yml")):
         raise HTTPException(status_code=400, detail="Unsupported file type. Use .json, .yaml, or .yml.")
+
+    # Read bounded chunks to enforce MAX_SPEC_SIZE (5 MB) during streaming
+    CHUNK_SIZE = 64 * 1024
+    total_bytes = 0
+    chunks = []
+    while True:
+        chunk = await file.read(CHUNK_SIZE)
+        if not chunk:
+            break
+        total_bytes += len(chunk)
+        if total_bytes > MAX_SPEC_SIZE:
+            raise HTTPException(status_code=413, detail="Specification file too large (max 5 MB).")
+        chunks.append(chunk)
+
+    contents = b"".join(chunks)
+
     # Save to a secure temporary file on the local filesystem
     import tempfile
     with tempfile.NamedTemporaryFile(delete=False, suffix=Path(file.filename).suffix) as tmp:
@@ -175,8 +198,7 @@ async def parse_openapi_endpoint(file: UploadFile = File(...)):
     try:
         # Parse using the existing OpenAPI parser; any validation errors raise ValueError
         endpoints = parse_openapi(str(temp_path))
-        # Convert Pydantic models to plain dicts for a JSON‑serialisable response
-        data = [e.dict() for e in endpoints]
+        data = [e.model_dump() for e in endpoints]
 
         # Create a session for this API assessment and store the parsed inventory
         session_id = session_store.create_session()
@@ -228,7 +250,7 @@ async def execute_tests(request: ExecuteRequest, x_session_id: str = Header(...,
         raise HTTPException(status_code=403, detail=str(pe))
     except KeyError:
         raise HTTPException(status_code=500, detail="Internal server error: unknown proposal ID")
-    return [f.dict() for f in findings]
+    return [f.model_dump() for f in findings]
 
 @app.get("/findings")
 async def list_findings(x_session_id: str = Header(..., alias="X-Session-ID")):
@@ -237,7 +259,7 @@ async def list_findings(x_session_id: str = Header(..., alias="X-Session-ID")):
         session = session_store.get_session(x_session_id)
     except KeyError:
         raise HTTPException(status_code=404, detail="Session not found")
-    return [f.dict() for f in session.findings.values()]
+    return [f.model_dump() for f in session.findings.values()]
 
 
 @app.get("/findings/{finding_id}")
@@ -254,7 +276,7 @@ async def get_finding(
         finding = session.get_finding(finding_id)
     except KeyError:
         raise HTTPException(status_code=404, detail="Finding not found")
-    return finding.dict()
+    return finding.model_dump()
 
 
 @app.post("/findings/{finding_id}/review")
@@ -319,7 +341,7 @@ async def review_finding(
         finding.assessment_outcome = AssessmentOutcome.FALSE_POSITIVE
         finding.status = FindingStatus.FALSE_POSITIVE
 
-    return finding.dict()
+    return finding.model_dump()
 
 
 # ---------------------------------------------------------------------------
@@ -353,7 +375,7 @@ async def create_report(
 
     report = _generate_report(session, request.target)
     session_store.add_report(x_session_id, report)
-    return report.dict()
+    return report.model_dump()
 
 
 @app.get("/reports/{report_id}")
@@ -370,7 +392,7 @@ async def get_report(
         report = session.get_report(report_id)
     except KeyError:
         raise HTTPException(status_code=404, detail="Report not found")
-    return report.dict()
+    return report.model_dump()
 
 
 from .security.pdf_export import generate_pdf_report as _generate_pdf_report
@@ -467,14 +489,20 @@ async def analyze_finding_endpoint(input_data: SecurityFindingInput):
 
 
 @app.post("/api/v1/chat")
-async def chat_endpoint(request: ChatMessageRequest):
+async def chat_endpoint(
+    request: ChatMessageRequest,
+    x_session_id: Optional[str] = Header(None, alias="X-Session-ID")
+):
     """Conversational security intelligence powered by ZYNORA SLM Engine.
 
     Accepts operator prompts and optional token-minimized context.
     Returns structured intent classification, safe probe suggestions, and interactive UI actions.
     """
     try:
-        response = process_chat_service(request)
+        session_id = x_session_id
+        if not session_id and request.context:
+            session_id = request.context.get("sessionId") or request.context.get("session_id")
+        response = process_chat_service(request, session_id=session_id)
         return response.model_dump()
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Chat processing failed: {str(exc)}")

@@ -25,7 +25,7 @@ def make_endpoint(**overrides):
         "responses": {"200": {"description": "OK"}},
     }
     base.update(overrides)
-    return EndpointModel.parse_obj(base)
+    return EndpointModel.model_validate(base)
 
 def test_bola_proposal_generated():
     ep = make_endpoint(path="/users/{user_id}")

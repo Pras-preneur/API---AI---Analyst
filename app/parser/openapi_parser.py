@@ -33,14 +33,23 @@ class ParameterModel(BaseModel):
     name: str
     location: str = Field(..., alias="in")
     required: bool = False
-    schema: Optional[SchemaModel] = None
+    schema_: Optional[SchemaModel] = Field(None, alias="schema")
     description: Optional[str] = None
+
+    @property
+    def schema(self) -> Optional[SchemaModel]:
+        return self.schema_
 
 
 class MediaTypeModel(BaseModel):
-    schema: Optional[SchemaModel] = None
+    model_config = ConfigDict(populate_by_name=True)
+    schema_: Optional[SchemaModel] = Field(None, alias="schema")
     example: Optional[Any] = None
     examples: Optional[Dict[str, Any]] = None
+
+    @property
+    def schema(self) -> Optional[SchemaModel]:
+        return self.schema_
 
 
 class RequestBodyModel(BaseModel):

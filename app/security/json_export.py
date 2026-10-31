@@ -18,7 +18,7 @@ def _serialize_value(val: Any) -> Any:
     if hasattr(val, "model_dump"):
         return _serialize_value(val.model_dump())
     if hasattr(val, "dict"):
-        return _serialize_value(val.dict())
+        return _serialize_value(val.model_dump() if hasattr(val, 'model_dump') else val.dict())
     if isinstance(val, dict):
         return {k: _serialize_value(v) for k, v in val.items()}
     if isinstance(val, (list, tuple, set)):

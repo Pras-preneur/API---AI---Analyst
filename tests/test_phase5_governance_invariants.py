@@ -183,7 +183,7 @@ def test_ai_cannot_approve_or_reject_proposals(clean_session_with_finding):
 def test_ai_cannot_mutate_evidence_or_review_history(clean_session_with_finding):
     session_id, _, finding = clean_session_with_finding
 
-    initial_evidence_dict = copy.deepcopy(finding.evidence.dict())
+    initial_evidence_dict = copy.deepcopy(finding.evidence.model_dump())
     initial_review_history_len = len(finding.review_history)
 
     # Perform AI analysis
@@ -194,7 +194,7 @@ def test_ai_cannot_mutate_evidence_or_review_history(clean_session_with_finding)
     assert response.status_code == 200
 
     stored_finding = session_store.get_finding(session_id, finding.finding_id)
-    assert stored_finding.evidence.dict() == initial_evidence_dict
+    assert stored_finding.evidence.model_dump() == initial_evidence_dict
     assert len(stored_finding.review_history) == initial_review_history_len
 
 

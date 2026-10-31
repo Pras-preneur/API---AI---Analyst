@@ -248,7 +248,7 @@ def _build_finding_detail(
         reviewed_at=finding.reviewed_at,
         reviewer_notes=finding.reviewer_notes,
         requires_re_review=finding.requires_re_review,
-        review_history=[r.dict() if hasattr(r, "dict") else r for r in finding.review_history],
+        review_history=[r.model_dump() if hasattr(r, "model_dump") else (r.dict() if hasattr(r, "dict") else r) for r in finding.review_history],
     )
 
 
