@@ -1,0 +1,35 @@
+openapi: 3.0.0
+info:
+  title: Broken Authentication Demo API
+  version: "1.0"
+  description: OpenAPI 3.0 specification demonstrating Broken Authentication (AUTH_MISSING_CREDENTIALS) differential testing.
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: HTTP Bearer token authentication
+security:
+  - BearerAuth: []
+paths:
+  /auth/secure/profile:
+    get:
+      summary: Retrieve protected user profile (Secure)
+      description: Endpoint strictly enforces authentication; returns 401 Unauthorized when credentials are omitted.
+      operationId: getSecureProfile
+      responses:
+        "200":
+          description: Protected user profile successfully retrieved
+        "401":
+          description: Unauthorized - missing or invalid credentials
+  /auth/vulnerable/profile:
+    get:
+      summary: Retrieve protected user profile (Vulnerable to Broken Authentication)
+      description: OpenAPI declares authentication requirement, but implementation fails to verify credentials and leaks protected profile data.
+      operationId: getVulnerableProfile
+      responses:
+        "200":
+          description: User profile retrieved
+        "401":
+          description: Unauthorized
+

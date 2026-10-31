@@ -1,0 +1,11 @@
+# API Security Assistant - Milestone 1
+
+fastapi
+pydantic>=2.0
+pyyaml
+uvicorn
+pytest
+python-multipart
+httpx2
+rich
+reportlab>=4.0.0

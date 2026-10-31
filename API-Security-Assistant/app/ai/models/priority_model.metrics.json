@@ -1,0 +1,62 @@
+{
+  "total_examples": 25,
+  "training_examples": 18,
+  "testing_examples": 7,
+  "macro_f1": 0.8412698412698413,
+  "classification_report": {
+    "P1": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 2.0
+    },
+    "P2": {
+      "precision": 0.75,
+      "recall": 1.0,
+      "f1-score": 0.8571428571428571,
+      "support": 3.0
+    },
+    "P3": {
+      "precision": 1.0,
+      "recall": 0.5,
+      "f1-score": 0.6666666666666666,
+      "support": 2.0
+    },
+    "accuracy": 0.8571428571428571,
+    "macro avg": {
+      "precision": 0.9166666666666666,
+      "recall": 0.8333333333333334,
+      "f1-score": 0.8412698412698413,
+      "support": 7.0
+    },
+    "weighted avg": {
+      "precision": 0.8928571428571429,
+      "recall": 0.8571428571428571,
+      "f1-score": 0.8435374149659863,
+      "support": 7.0
+    }
+  },
+  "confusion_matrix_labels": [
+    "P1",
+    "P2",
+    "P3"
+  ],
+  "confusion_matrix": [
+    [
+      2,
+      0,
+      0
+    ],
+    [
+      0,
+      3,
+      0
+    ],
+    [
+      0,
+      1,
+      1
+    ]
+  ],
+  "note": "Exploratory results only. Performance depends on the quality and representativeness of labeled data."
+}
