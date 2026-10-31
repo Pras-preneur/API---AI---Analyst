@@ -1,0 +1,103 @@
+{
+  "benchmark_dataset": "data/slm_training/eval.jsonl",
+  "total_test_cases": 10,
+  "intent_classification_accuracy": "100.0%",
+  "evidence_grounding_score": "100.0%",
+  "structured_schema_validity": "100.0%",
+  "hallucination_rate": "0.0% (Deterministic Domain-Grounded)",
+  "average_inference_latency_ms": "0.05ms",
+  "slm_engine_version": "Zynora-SLM-API-v2.0",
+  "status": "PASS",
+  "details": [
+    {
+      "test_id": "tc-1",
+      "instruction": "Who built Zynora and what are you?",
+      "expected_intent": "project_introduction",
+      "actual_intent": "project_introduction",
+      "intent_match": true,
+      "grounding_match": true,
+      "latency_ms": 0.15
+    },
+    {
+      "test_id": "tc-2",
+      "instruction": "Good afternoon, can we audit my API?",
+      "expected_intent": "greeting",
+      "actual_intent": "greeting",
+      "intent_match": true,
+      "grounding_match": true,
+      "latency_ms": 0.01
+    },
+    {
+      "test_id": "tc-3",
+      "instruction": "Why not just use Postman for this?",
+      "expected_intent": "project_explanation",
+      "actual_intent": "project_explanation",
+      "intent_match": true,
+      "grounding_match": true,
+      "latency_ms": 0.02
+    },
+    {
+      "test_id": "tc-4",
+      "instruction": "How do you decide between P1, P2, and P3 priority?",
+      "expected_intent": "security_analysis",
+      "actual_intent": "security_analysis",
+      "intent_match": true,
+      "grounding_match": true,
+      "latency_ms": 0.03
+    },
+    {
+      "test_id": "tc-5",
+      "instruction": "Show me an example of BOLA vulnerability in banking",
+      "expected_intent": "security_analysis",
+      "actual_intent": "security_analysis",
+      "intent_match": true,
+      "grounding_match": true,
+      "latency_ms": 0.04
+    },
+    {
+      "test_id": "tc-6",
+      "instruction": "Analyze this finding without endpoint or method",
+      "expected_intent": "clarification",
+      "actual_intent": "clarification",
+      "intent_match": true,
+      "grounding_match": true,
+      "latency_ms": 0.01
+    },
+    {
+      "test_id": "tc-7",
+      "instruction": "Prepare remediation for mass assignment on /api/v1/profile",
+      "expected_intent": "remediation_suggestion",
+      "actual_intent": "remediation_suggestion",
+      "intent_match": true,
+      "grounding_match": true,
+      "latency_ms": 0.02
+    },
+    {
+      "test_id": "tc-8",
+      "instruction": "Create an executive security assessment report",
+      "expected_intent": "report_generation",
+      "actual_intent": "report_generation",
+      "intent_match": true,
+      "grounding_match": true,
+      "latency_ms": 0.13
+    },
+    {
+      "test_id": "tc-9",
+      "instruction": "Explain BFLA simply for a beginner",
+      "expected_intent": "conversation",
+      "actual_intent": "conversation",
+      "intent_match": true,
+      "grounding_match": true,
+      "latency_ms": 0.03
+    },
+    {
+      "test_id": "tc-10",
+      "instruction": "Can ZYNORA perform autonomous live penetration testing?",
+      "expected_intent": "project_explanation",
+      "actual_intent": "project_explanation",
+      "intent_match": true,
+      "grounding_match": true,
+      "latency_ms": 0.01
+    }
+  ]
+}

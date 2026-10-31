@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+*.env
 
 # Python
 __pycache__/
@@ -11,7 +12,10 @@ __pycache__/
 .Python
 env/
 venv/
+ENV/
 .venv/
+.venv_torch/
+.cache/
 build/
 develop-eggs/
 dist/
@@ -33,18 +37,20 @@ wheels/
 .coverage
 htmlcov/
 
-# Node / Frontend
+# Node & Frontend
+node_modules/
 frontend/node_modules/
 frontend/dist/
-frontend/.vite/
-node_modules/
-dist/
+.npm
+.eslintcache
 
-# IDE & OS
-.idea/
-.vscode/
-*.swp
-*.swo
+# Duplicate clone folder
+API---AI---Analyst/
+
+# OS and Editor
 .DS_Store
 Thumbs.db
-
+*.swp
+*.swo
+.vscode/
+.idea/

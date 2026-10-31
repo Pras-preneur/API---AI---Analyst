@@ -1,0 +1,123 @@
+{
+  "model_id": "ZYNORA-HF-BERT-Priority-v1.0",
+  "base_model": "prajjwal1/bert-tiny",
+  "framework": "PyTorch + Hugging Face Transformers",
+  "task": "API Security Finding Priority Classification (P1 / P2 / P3)",
+  "labels": [
+    "P1",
+    "P2",
+    "P3"
+  ],
+  "id2label": {
+    "0": "P1",
+    "1": "P2",
+    "2": "P3"
+  },
+  "label2id": {
+    "P1": 0,
+    "P2": 1,
+    "P3": 2
+  },
+  "training_config": {
+    "hf_base_model": "prajjwal1/bert-tiny",
+    "num_labels": 3,
+    "num_epochs": 10,
+    "batch_size": 8,
+    "learning_rate": 3e-05,
+    "max_length": 128,
+    "weight_decay": 0.01,
+    "output_dir": "models/zynora_hf_pytorch",
+    "seed": 42
+  },
+  "training_history": [
+    {
+      "epoch": 1,
+      "train_loss": 1.1176,
+      "eval_loss": 1.1099,
+      "accuracy": 0.3143,
+      "macro_f1": 0.1594
+    },
+    {
+      "epoch": 2,
+      "train_loss": 1.1069,
+      "eval_loss": 1.0971,
+      "accuracy": 0.3143,
+      "macro_f1": 0.1594
+    },
+    {
+      "epoch": 3,
+      "train_loss": 1.1025,
+      "eval_loss": 1.0949,
+      "accuracy": 0.2571,
+      "macro_f1": 0.1395
+    },
+    {
+      "epoch": 4,
+      "train_loss": 1.0938,
+      "eval_loss": 1.0928,
+      "accuracy": 0.4857,
+      "macro_f1": 0.4688
+    },
+    {
+      "epoch": 5,
+      "train_loss": 1.0846,
+      "eval_loss": 1.0873,
+      "accuracy": 0.5714,
+      "macro_f1": 0.4595
+    },
+    {
+      "epoch": 6,
+      "train_loss": 1.0808,
+      "eval_loss": 1.0839,
+      "accuracy": 0.4571,
+      "macro_f1": 0.3591
+    },
+    {
+      "epoch": 7,
+      "train_loss": 1.0836,
+      "eval_loss": 1.0836,
+      "accuracy": 0.4286,
+      "macro_f1": 0.3342
+    },
+    {
+      "epoch": 8,
+      "train_loss": 1.0762,
+      "eval_loss": 1.0809,
+      "accuracy": 0.4286,
+      "macro_f1": 0.3317
+    },
+    {
+      "epoch": 9,
+      "train_loss": 1.0798,
+      "eval_loss": 1.0793,
+      "accuracy": 0.4286,
+      "macro_f1": 0.3342
+    },
+    {
+      "epoch": 10,
+      "train_loss": 1.0718,
+      "eval_loss": 1.0791,
+      "accuracy": 0.4286,
+      "macro_f1": 0.3342
+    }
+  ],
+  "final_evaluation": {
+    "accuracy": 0.42857142857142855,
+    "macro_f1": 0.3341687552213868,
+    "per_class_f1": {
+      "P1": 0.4762,
+      "P2": 0.0,
+      "P3": 0.5263
+    },
+    "total_samples": 80,
+    "eval_loss": 1.079101061820984
+  },
+  "is_real_neural_model": true,
+  "model_files": [
+    "config.json",
+    "model.safetensors",
+    "tokenizer.json",
+    "tokenizer_config.json",
+    "vocab.txt"
+  ]
+}
