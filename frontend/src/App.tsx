@@ -294,16 +294,17 @@ export function App() {
 
     setIsLoading(true);
 
-    const p = text.toLowerCase();
-    const isProposalIntent =
-      p.includes('propose') ||
-      p.includes('test') ||
-      p.includes('scan') ||
-      p.includes('audit') ||
-      p.includes('bola') ||
-      p.includes('bfla');
+    const p = text.toLowerCase().trim();
+    // Targeted: Only trigger proposal formulation when explicitly and deliberately requested
+    const isExplicitProposalRequest =
+      /\b(generate|formulate|create|fetch)\s+(all\s+)?(security\s+)?(test\s+)?proposals?\b/i.test(p) ||
+      /\bpropose\s+(security\s+)?tests?\b/i.test(p) ||
+      p === 'generate proposals' ||
+      p === 'propose tests' ||
+      p.startsWith('run comprehensive security audit scan') ||
+      p.startsWith('formulate human-in-the-loop');
 
-    if (isProposalIntent) {
+    if (isExplicitProposalRequest) {
       if (!backendSessionId || !activeSpec) {
         const assistantMsg: ChatMessage = {
           id: `m-${Date.now() + 1}`,
@@ -365,6 +366,7 @@ export function App() {
       const slmResult = await sendChatMessageToSLM(text, {
         specTitle: activeSpec?.title,
         endpointCount: activeSpec?.endpoints.length,
+        sessionId: backendSessionId,
       });
 
       const assistantMsg: ChatMessage = {

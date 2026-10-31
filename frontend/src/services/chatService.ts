@@ -138,10 +138,12 @@ export async function sendChatMessageToSLM(
     'http://localhost:8000/api/v1/chat',
   ];
 
-  // Token Optimization: Compact context, strip raw files, limit to latest 10 messages
+  // Token Optimization & Live Session Grounding: Pass active session ID and compact context
+  const sessionId = context?.sessionId;
   const optimizedContext = context ? {
     specTitle: context.specTitle,
     endpointCount: context.endpointCount,
+    sessionId: sessionId,
     recentMessages: Array.isArray(context.recentMessages)
       ? context.recentMessages.slice(-10).map((m: any) => ({
           role: m.sender || m.role,
@@ -155,18 +157,26 @@ export async function sendChatMessageToSLM(
     context: optimizedContext,
   };
 
+  const reqHeaders: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+  };
+  if (sessionId) {
+    reqHeaders['X-Session-ID'] = sessionId;
+  }
+
   for (const url of candidateUrls) {
     try {
       const response = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: reqHeaders,
         body: JSON.stringify(payload),
       });
       if (response.ok) {
         const data = await response.json();
         const reportAction = data.ui_actions?.find((a: any) => a.type === 'show_report_options');
         return {
-          reply: data.reply,
+          reply: data.reply || data.message,
           intent: data.intent,
           reportOptions: reportAction?.options,
           structured: data.structured,
